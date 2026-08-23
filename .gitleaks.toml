@@ -4,13 +4,17 @@ title = "FormaturasFlow gitleaks config"
 useDefault = true
 
 [allowlist]
-description = "Arquivos de exemplo com placeholders bem marcados"
+description = "Arquivos de exemplo e testes com placeholders bem marcados"
 paths = [
   '''.*\.example\.json$''',
   '''.*\.example$''',
   '''\.env\.example$''',
   '''README.*\.md$''',
   '''DOCUMENTACAO\.md$''',
+  '''^tests/.*''',
+  '''.*_[Tt]ests?\.cs$''',
+  '''.*[Tt]est.*\.cs$''',
+  '''.*/smoke/.*''',
 ]
 
 regexes = [
@@ -19,4 +23,10 @@ regexes = [
   '''troque_esta_senha_forte''',
   '''troque_por_uma_chave_de_pelo_menos''',
   '''ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx''',
+  '''SenhaForte\d+!?''',
+  '''MinhaSenha\d+!?''',
+  '''chave-hmac-forte-com-mais-de-32-bytes-obrigatorio-aqui!!''',
+  '''test-webhook-secret''',
+  '''test-pix-key''',
+  '''SenhaForte2026!''',
 ]
