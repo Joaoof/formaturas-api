@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/src/FormaturasFlow.Api"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      microsoft:
+        patterns:
+          - "Microsoft.*"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

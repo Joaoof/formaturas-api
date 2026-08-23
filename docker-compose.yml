@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: formaturas-postgres
+    environment:
+      POSTGRES_DB: formaturas_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - formaturas_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d formaturas_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: src/FormaturasFlow.Api/Dockerfile
+    container_name: formaturas-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=formaturas_dev;Username=postgres;Password=postgres"
+      Jwt__Issuer: "https://api.formaturasflow.local"
+      Jwt__Audience: "formaturasflow-front"
+      Jwt__Key: "${JWT_KEY:?defina JWT_KEY no .env}"
+      Jwt__AccessTokenMinutes: "60"
+      Efi__Sandbox: "true"
+      Efi__ClientId: "${EFI_CLIENT_ID:-}"
+      Efi__ClientSecret: "${EFI_CLIENT_SECRET:-}"
+      Efi__CertificateBase64: "${EFI_CERT_BASE64:-}"
+      Efi__CertificatePassword: "${EFI_CERT_PASSWORD:-}"
+      Efi__PixKey: "${EFI_PIX_KEY:-}"
+      Efi__WebhookSecret: "${EFI_WEBHOOK_SECRET:-}"
+    ports:
+      - "8080:8080"
+
+volumes:
+  formaturas_pgdata:

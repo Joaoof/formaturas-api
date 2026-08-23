@@ -1,0 +1,22 @@
+title = "FormaturasFlow gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Arquivos de exemplo com placeholders bem marcados"
+paths = [
+  '''.*\.example\.json$''',
+  '''.*\.example$''',
+  '''\.env\.example$''',
+  '''README.*\.md$''',
+  '''DOCUMENTACAO\.md$''',
+]
+
+regexes = [
+  '''<REPLACE[^>]*>''',
+  '''seu-usuario-github''',
+  '''troque_esta_senha_forte''',
+  '''troque_por_uma_chave_de_pelo_menos''',
+  '''ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx''',
+]
