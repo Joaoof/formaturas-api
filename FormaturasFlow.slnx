@@ -2,4 +2,8 @@
   <Folder Name="/src/">
     <Project Path="src/FormaturasFlow.Api/FormaturasFlow.Api.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FormaturasFlow.Api.UnitTests/FormaturasFlow.Api.UnitTests.csproj" />
+    <Project Path="tests/FormaturasFlow.Api.IntegrationTests/FormaturasFlow.Api.IntegrationTests.csproj" />
+  </Folder>
 </Solution>

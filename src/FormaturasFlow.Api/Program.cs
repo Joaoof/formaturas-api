@@ -115,3 +115,5 @@ static async Task SeedRolesAsync(IServiceProvider sp)
         if (!await roleMgr.RoleExistsAsync(r))
             await roleMgr.CreateAsync(new ApplicationRole(r));
 }
+
+public partial class Program;

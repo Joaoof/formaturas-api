@@ -1,0 +1,88 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Restore
+        run: dotnet restore tests/FormaturasFlow.Api.UnitTests/FormaturasFlow.Api.UnitTests.csproj
+
+      - name: Test (unit)
+        run: >
+          dotnet test tests/FormaturasFlow.Api.UnitTests/FormaturasFlow.Api.UnitTests.csproj
+          --no-restore
+          --configuration Release
+          --logger "trx;LogFileName=unit.trx"
+          --logger "console;verbosity=normal"
+          --collect:"XPlat Code Coverage"
+          --results-directory ./TestResults/unit
+
+      - name: Upload unit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: TestResults/unit
+
+  integration:
+    name: integration tests (Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Restore
+        run: dotnet restore tests/FormaturasFlow.Api.IntegrationTests/FormaturasFlow.Api.IntegrationTests.csproj
+
+      - name: Test (integration)
+        run: >
+          dotnet test tests/FormaturasFlow.Api.IntegrationTests/FormaturasFlow.Api.IntegrationTests.csproj
+          --no-restore
+          --configuration Release
+          --logger "trx;LogFileName=integration.trx"
+          --logger "console;verbosity=normal"
+          --collect:"XPlat Code Coverage"
+          --results-directory ./TestResults/integration
+
+      - name: Upload integration results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: TestResults/integration
+
+  smoke:
+    name: smoke tests (prod endpoint)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run smoke against production
+        env:
+          BASE_URL: ${{ vars.PROD_BASE_URL || 'http://191.101.78.252' }}
+        run: |
+          chmod +x tests/smoke/smoke.sh
+          tests/smoke/smoke.sh
