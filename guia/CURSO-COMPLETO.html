@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Da ideia ao ar — Guia completo de como construímos e subimos a API</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1a1a2e;
+    --muted: #5c6079;
+    --accent: #6366f1;
+    --accent-soft: #eef2ff;
+    --success: #10b981;
+    --success-soft: #d1fae5;
+    --warn: #f59e0b;
+    --warn-soft: #fef3c7;
+    --danger: #ef4444;
+    --danger-soft: #fee2e2;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+    --code-comment: #94a3b8;
+    --card: #f9fafb;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 400;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.75;
+    margin: 0;
+    padding: 48px 24px;
+    font-size: 16px;
+  }
+  main { max-width: 820px; margin: 0 auto; }
+
+  .cover {
+    text-align: center;
+    padding: 60px 0 80px;
+    border-bottom: 3px dashed var(--accent-soft);
+    margin-bottom: 60px;
+  }
+  .cover .tag {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .cover h1 {
+    font-weight: 800;
+    font-size: 48px;
+    line-height: 1.1;
+    margin: 0 0 12px 0;
+    background: linear-gradient(135deg, var(--accent) 0%, #a855f7 50%, #ec4899 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .cover .subtitle {
+    font-weight: 400;
+    color: var(--muted);
+    font-size: 20px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .cover .author {
+    margin-top: 32px;
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  h1 {
+    font-weight: 800;
+    font-size: 36px;
+    margin-top: 80px;
+    margin-bottom: 8px;
+    color: var(--ink);
+  }
+  h1.part {
+    background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  h1 + .part-sub {
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 17px;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-weight: 700;
+    font-size: 26px;
+    margin-top: 48px;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--accent-soft);
+  }
+  h3 {
+    font-weight: 600;
+    font-size: 19px;
+    margin-top: 28px;
+    margin-bottom: 8px;
+    color: var(--accent);
+  }
+  h4 {
+    font-weight: 600;
+    font-size: 16px;
+    margin-top: 20px;
+    margin-bottom: 6px;
+  }
+  p { margin: 0 0 16px 0; }
+  strong { font-weight: 600; color: var(--ink); }
+  em { font-style: italic; color: var(--muted); }
+
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 14px 18px;
+    border-radius: 6px;
+    margin: 20px 0;
+  }
+  .callout.tip { border-color: var(--success); background: var(--success-soft); }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout.danger { border-color: var(--danger); background: var(--danger-soft); }
+  .callout p:last-child { margin: 0; }
+  .callout .label {
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 16px 20px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; color: inherit; padding: 0; font-weight: 400; }
+  pre .cm { color: var(--code-comment); }
+
+  .toc {
+    background: linear-gradient(135deg, var(--accent-soft) 0%, #fdf4ff 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin: 40px 0;
+  }
+  .toc h2 { margin-top: 0; border: none; padding: 0; font-size: 22px; }
+  .toc ol { padding-left: 24px; margin: 0; }
+  .toc ol > li { margin-bottom: 12px; font-weight: 600; }
+  .toc ol ul { padding-left: 20px; margin: 6px 0; }
+  .toc ol ul li { font-weight: 400; color: var(--muted); margin-bottom: 4px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  .analogy {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin: 20px 0;
+    border-left: 4px solid #a855f7;
+  }
+  .analogy .label {
+    color: #a855f7;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  .reflect {
+    background: #fff7ed;
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin: 20px 0;
+    border-left: 4px solid #f97316;
+  }
+  .reflect .label {
+    color: #ea580c;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  ul, ol { padding-left: 22px; margin: 0 0 16px 0; }
+  li { margin-bottom: 6px; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--card);
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .glossary dt {
+    font-weight: 600;
+    color: var(--accent);
+    margin-top: 14px;
+  }
+  .glossary dd {
+    margin: 4px 0 0 0;
+    color: var(--ink);
+  }
+
+  hr {
+    border: none;
+    border-top: 1px dashed var(--border);
+    margin: 60px 0;
+  }
+
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+
+  @media print {
+    body { padding: 20px 0; font-size: 12pt; }
+    h1 { page-break-after: avoid; }
+    h2 { page-break-after: avoid; }
+    .callout, .analogy, .reflect, pre { page-break-inside: avoid; }
+    .cover { page-break-after: always; }
+    h1.part { page-break-before: always; }
+    pre { font-size: 10pt; }
+    a { color: var(--accent); text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<div class="cover">
+  <span class="tag">Curso Completo</span>
+  <h1>Da ideia ao ar</h1>
+  <p class="subtitle">Um guia completo, sem enrolação, de como construímos uma API real e a colocamos rodando na internet — escrito para você aprender de verdade.</p>
+  <p class="author">Escrito para o João, que quer aprender a programar e a pensar como programador.</p>
+</div>
+
+<div class="toc">
+<h2>O que você vai aprender neste guia</h2>
+<ol>
+  <li><a href="#p0">Introdução: como um programador pensa</a>
+    <ul>
+      <li>Programação é resolver problemas, não decorar sintaxe</li>
+      <li>Erros são informação, não fracasso</li>
+      <li>Toda decisão tem trade-off</li>
+    </ul>
+  </li>
+  <li><a href="#p1">Parte I — Fundamentos que você precisa dominar</a>
+    <ul>
+      <li>Terminal, editor, Git</li>
+      <li>HTTP: o idioma da web</li>
+      <li>Cliente e servidor</li>
+    </ul>
+  </li>
+  <li><a href="#p2">Parte II — O que é uma API e por que a gente fez uma</a>
+    <ul>
+      <li>API REST</li>
+      <li>JSON</li>
+      <li>Verbos, status codes, endpoints</li>
+    </ul>
+  </li>
+  <li><a href="#p3">Parte III — Construindo a API com .NET 10</a>
+    <ul>
+      <li>C# em 5 minutos</li>
+      <li>Minimal APIs</li>
+      <li>Injeção de dependência</li>
+    </ul>
+  </li>
+  <li><a href="#p4">Parte IV — Onde os dados moram: banco de dados</a>
+    <ul>
+      <li>Banco relacional e SQL</li>
+      <li>PostgreSQL</li>
+      <li>ORM: falando com o banco em C#</li>
+      <li>Migrations: versionando o banco</li>
+    </ul>
+  </li>
+  <li><a href="#p5">Parte V — Autenticação e autorização</a>
+    <ul>
+      <li>Password hashing (nunca guarde senha em texto puro!)</li>
+      <li>JWT: o crachá do usuário</li>
+      <li>Roles: quem pode o quê</li>
+    </ul>
+  </li>
+  <li><a href="#p6">Parte VI — Integrando com serviços externos</a>
+    <ul>
+      <li>Chamando outras APIs (Efí Bank)</li>
+      <li>mTLS: certificados de segurança</li>
+      <li>Webhooks e idempotência</li>
+    </ul>
+  </li>
+  <li><a href="#p7">Parte VII — Empacotando com Docker</a>
+    <ul>
+      <li>O problema que Docker resolve</li>
+      <li>Dockerfile</li>
+      <li>Docker Compose</li>
+    </ul>
+  </li>
+  <li><a href="#p8">Parte VIII — Servidor real na internet</a>
+    <ul>
+      <li>O que é uma VPS</li>
+      <li>SSH, chave pública e privada</li>
+      <li>Firewall e fail2ban</li>
+    </ul>
+  </li>
+  <li><a href="#p9">Parte IX — CI/CD: automação total</a>
+    <ul>
+      <li>GitHub Actions</li>
+      <li>GHCR (Container Registry)</li>
+      <li>Watchtower (auto-update)</li>
+    </ul>
+  </li>
+  <li><a href="#p10">Parte X — Testes: dormir tranquilo</a>
+    <ul>
+      <li>Unit test</li>
+      <li>Integration test</li>
+      <li>Smoke test</li>
+    </ul>
+  </li>
+  <li><a href="#p11">Parte XI — Documentação viva: OpenAPI e Scalar</a></li>
+  <li><a href="#p12">Parte XII — Boas práticas (o que ainda vamos fazer)</a>
+    <ul>
+      <li>HTTPS, backup, rate limit, refresh token</li>
+      <li>Logging estruturado, observabilidade</li>
+    </ul>
+  </li>
+  <li><a href="#p13">Parte XIII — Como pensar como um dev sênior</a></li>
+  <li><a href="#glossario">Glossário</a></li>
+  <li><a href="#recursos">Recursos: livros, canais, cursos</a></li>
+</ol>
+</div>
+
+<!-- ===================================================== -->
+<h1 id="p0" class="part">Introdução</h1>
+<p class="part-sub">Como um programador pensa (spoiler: não é como você imagina)</p>
+
+<p>Antes de a gente colocar a mão no código, precisa desmontar três mitos que atrapalham quem tá começando:</p>
+
+<h3>Mito 1: “Preciso decorar tudo”</h3>
+<p>Programadores <strong>não decoram sintaxe</strong>. Ninguém lembra a assinatura exata de uma função. A gente lembra que <em>existe</em>, e vai no Google/documentação/IA lembrar como se escreve. O que a gente cultiva é o <strong>vocabulário de conceitos</strong>: sei que existe "arredondamento bancário", sei que existe "cache", sei que existe "idempotência". Aí eu pesquiso como usar em cada linguagem.</p>
+
+<div class="callout tip">
+  <span class="label">O ponto</span>
+  <p>Aprender programação é aprender <strong>quais problemas existem</strong> e <strong>quais famílias de solução</strong>. A sintaxe é só a linguagem que você usa pra escrever a solução. Muda a linguagem, mas os problemas permanecem.</p>
+</div>
+
+<h3>Mito 2: “Se deu erro, eu falhei”</h3>
+<p>Erros são a <strong>coisa mais valiosa que o computador pode te dar</strong>. Um erro te diz exatamente o que está errado. Quando o CI falhou nos testes de integração, o log dizia:</p>
+
+<pre><code>System.InvalidOperationException : ConnectionStrings:Default ausente.</code></pre>
+
+<p>Essa linha me disse duas coisas: (1) o problema é a configuração da connection string, (2) ela está "ausente" — ou seja, o código está procurando um valor que não foi definido. Em 30 segundos eu sabia o caminho da correção.</p>
+
+<div class="callout warn">
+  <span class="label">Regra de ouro</span>
+  <p><strong>Leia a mensagem de erro inteira antes de perguntar pra alguém.</strong> Copia e cola no Google — 90% das vezes alguém já teve o mesmo problema. Isso vale mais que qualquer curso.</p>
+</div>
+
+<h3>Mito 3: “Existe o jeito certo”</h3>
+<p>Não existe. Existem <strong>trade-offs</strong>. Toda decisão em programação é uma escolha entre coisas boas e coisas ruins. Alguns exemplos do nosso projeto:</p>
+
+<table>
+  <tr><th>Escolha que fizemos</th><th>Vantagem</th><th>Desvantagem</th></tr>
+  <tr><td>Minimal APIs em vez de Controllers</td><td>Menos código</td><td>Menos "opinado", cada dev pode estruturar de um jeito</td></tr>
+  <tr><td>Migrations rodando no startup</td><td>Deploy simples</td><td>Não escala para muitas réplicas</td></tr>
+  <tr><td>Postgres no mesmo servidor da API</td><td>Barato, simples</td><td>Se o servidor cai, cai tudo</td></tr>
+</table>
+
+<p>Um <em>dev sênior</em> não é quem sabe "o certo" — é quem consegue <strong>explicar por que escolheu</strong> uma opção em vez de outra.</p>
+
+<div class="reflect">
+  <span class="label">Reflita</span>
+  <p>Pense num aplicativo que você usa muito (Instagram, WhatsApp, Nubank). Toda escolha ali é uma decisão de alguém com um trade-off. Por que o WhatsApp não deixa você editar mensagens antigas facilmente? É bug? Não. Foi uma escolha de simplicidade vs auditabilidade. Se você começar a olhar assim, vai aprender muito só de usar apps.</p>
+</div>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p1" class="part">Parte I</h1>
+<p class="part-sub">Fundamentos que você precisa dominar antes de qualquer coisa</p>
+
+<h2>1.1 O terminal (a "linha de comando")</h2>
+<p>É uma janela preta onde você digita comandos e o computador executa. É <strong>o único jeito profissional</strong> de mexer em servidores — não tem mouse lá.</p>
+<p>No Windows tem o <strong>PowerShell</strong> (mais moderno) e o <strong>CMD</strong> (antigão). No macOS/Linux tem o <strong>Bash</strong> ou <strong>Zsh</strong>. As sintaxes são diferentes, mas os conceitos são os mesmos: você navega em pastas, roda programas, encadeia comandos.</p>
+
+<pre><code><span class="cm"># PowerShell (Windows)</span>
+cd C:\Users\joao\projetos       <span class="cm"># muda de pasta</span>
+ls                              <span class="cm"># lista arquivos</span>
+git status                      <span class="cm"># roda o git</span>
+
+<span class="cm"># Bash (Linux/Mac)</span>
+cd /home/joao/projetos
+ls -la
+git status</code></pre>
+
+<div class="analogy">
+  <span class="label">Analogia</span>
+  <p>Se o Windows Explorer é o carro automático, o terminal é o carro manual: você faz TUDO você mesmo, é mais chato no começo, mas você controla tudo com precisão cirúrgica. Todo dev profissional dirige manual.</p>
+</div>
+
+<h2>1.2 O editor de código</h2>
+<p>O queridinho da galera é o <strong>VS Code</strong> (grátis, da Microsoft). Para .NET, dá também pra usar o <strong>Rider</strong> (pago, da JetBrains) ou <strong>Visual Studio</strong> (só Windows, mais pesado).</p>
+
+<p>Aprenda a usar o editor com atalhos de teclado. Cada segundo salvo em digitar aparece como "10 minutos por dia" no fim do mês.</p>
+
+<h2>1.3 Git: viagem no tempo do seu código</h2>
+<p><strong>Git</strong> é um sistema que grava snapshots do seu código a cada mudança que você marca (chamada de <strong>commit</strong>). Se você quebrar algo, volta para o snapshot anterior. Se você quer experimentar sem quebrar o principal, cria uma "branch" (galho paralelo).</p>
+
+<pre><code><span class="cm"># Ver o que mudou</span>
+git status
+git diff
+
+<span class="cm"># Salvar um snapshot</span>
+git add .
+git commit -m "adiciona login por email"
+
+<span class="cm"># Enviar pro GitHub</span>
+git push origin main
+
+<span class="cm"># Baixar mudanças de outros</span>
+git pull</code></pre>
+
+<p>O <strong>GitHub</strong> é uma empresa (agora da Microsoft) que hospeda repositórios Git na nuvem. É onde o mundo inteiro compartilha código. No nosso projeto, o repositório é <code>github.com/Joaoof/formaturas-api</code>.</p>
+
+<h2>1.4 HTTP: o idioma da web</h2>
+<p>Todo aplicativo que se conecta à internet fala <strong>HTTP</strong>. É um protocolo (um conjunto de regras) para <strong>um cliente</strong> (seu navegador, seu app) pedir alguma coisa para <strong>um servidor</strong> (computador remoto), e o servidor responder.</p>
+
+<div class="analogy">
+  <span class="label">Analogia</span>
+  <p>É como pedir comida no drive-thru. Você (cliente) fala pelo alto-falante: "quero um sanduíche" (requisição). O funcionário (servidor) volta com o sanduíche (resposta) ou avisa "acabou" (status de erro).</p>
+</div>
+
+<p>Toda requisição HTTP tem:</p>
+<ul>
+  <li><strong>Verbo</strong>: a intenção. <code>GET</code> (pedir), <code>POST</code> (criar), <code>PUT</code> (atualizar tudo), <code>PATCH</code> (atualizar parte), <code>DELETE</code> (remover).</li>
+  <li><strong>URL</strong>: o "endereço" do recurso. Ex: <code>http://191.101.78.252/api/v1/alunos</code></li>
+  <li><strong>Headers</strong>: metadados. Ex: <code>Authorization: Bearer &lt;token&gt;</code> (crachá).</li>
+  <li><strong>Body</strong> (às vezes): dados que você envia. Normalmente em JSON.</li>
+</ul>
+
+<p>Toda resposta HTTP tem:</p>
+<ul>
+  <li><strong>Status code</strong>: número de 3 dígitos que diz como foi.
+    <ul>
+      <li><strong>2xx</strong> deu certo (200 OK, 201 Created, 204 No Content).</li>
+      <li><strong>4xx</strong> você errou (400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found).</li>
+      <li><strong>5xx</strong> o servidor errou (500 Internal Server Error).</li>
+    </ul>
+  </li>
+  <li><strong>Body</strong>: os dados que você pediu, normalmente em JSON.</li>
+</ul>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p2" class="part">Parte II</h1>
+<p class="part-sub">O que é uma API e por que a gente fez uma</p>
+
+<h2>2.1 API resumida em uma frase</h2>
+<p>API é um <strong>garçom</strong>. Você (o cliente — pode ser um app mobile, um site, outro sistema) pede algo. A API vai na cozinha (banco de dados, outros serviços), busca, monta a resposta, e te entrega.</p>
+
+<p>No nosso caso, a API <strong>FormaturasFlow</strong> serve para um sistema de gestão financeira de formaturas. Quem chama ela vai ser um <strong>front-end</strong> (o site que o pessoal do escritório usa) e um dia talvez um app mobile.</p>
+
+<h2>2.2 REST: uma convenção pra APIs sobre HTTP</h2>
+<p><strong>REST</strong> é uma convenção que diz: "URLs representam recursos, verbos HTTP representam ações". Assim:</p>
+
+<pre><code>GET    /api/v1/alunos          <span class="cm"># lista todos os alunos</span>
+GET    /api/v1/alunos/{id}     <span class="cm"># pega um aluno específico</span>
+POST   /api/v1/alunos          <span class="cm"># cria um aluno novo</span>
+PUT    /api/v1/alunos/{id}     <span class="cm"># atualiza um aluno</span>
+DELETE /api/v1/alunos/{id}     <span class="cm"># remove um aluno</span></code></pre>
+
+<p>Note que a URL sempre é o mesmo "recurso" (<code>/alunos</code>), o que muda é o <strong>verbo</strong>. Isso é REST.</p>
+
+<h2>2.3 JSON: como a gente troca dados</h2>
+<p><strong>JSON</strong> (JavaScript Object Notation) é um formato de texto pra trocar dados. Parece um objeto JavaScript ou dicionário Python. Todo mundo entende: navegador, servidor, banco.</p>
+
+<pre><code>{
+  "id": "abc-123",
+  "nomeCompleto": "Maria Silva",
+  "email": "maria@ex.com",
+  "cpf": "12345678900",
+  "criadoEm": "2026-01-15T10:30:00Z"
+}</code></pre>
+
+<div class="reflect">
+  <span class="label">Reflita</span>
+  <p>Quando você abre o Instagram, o app envia <strong>vários</strong> requests HTTP: um pra buscar o feed, um pra buscar as histórias, um pra baixar cada imagem. Cada um retorna JSON (ou binário no caso das imagens). Toda internet moderna funciona assim.</p>
+</div>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p3" class="part">Parte III</h1>
+<p class="part-sub">Construindo a API com .NET 10</p>
+
+<h2>3.1 O que é .NET, C# e ASP.NET Core</h2>
+<p>Vamos separar:</p>
+<ul>
+  <li><strong>C#</strong> é a linguagem que a gente escreve (tipo Java ou TypeScript com generics).</li>
+  <li><strong>.NET</strong> é a plataforma que executa C# (tipo a JVM pro Java, ou o Node pro JavaScript).</li>
+  <li><strong>ASP.NET Core</strong> é um framework de dentro do .NET focado em web/API.</li>
+</ul>
+
+<p>É software da Microsoft, mas hoje é 100% open source e roda no Linux (a nossa API tá rodando num Linux Ubuntu na VPS).</p>
+
+<h2>3.2 C# em cinco minutos</h2>
+<p>C# é <strong>tipada</strong> (você declara o tipo de cada variável), <strong>orientada a objetos</strong> (classes, herança) e <strong>compilada</strong> (o código vira código de máquina antes de rodar).</p>
+
+<pre><code><span class="cm">// declara variável</span>
+int idade = 25;
+string nome = "João";
+decimal valor = 1250.50m;
+
+<span class="cm">// método (função dentro de uma classe)</span>
+public decimal Somar(decimal a, decimal b)
+{
+    return a + b;
+}
+
+<span class="cm">// classe</span>
+public class Aluno
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Nome { get; set; } = string.Empty;
+    public string? Email { get; set; }
+}</code></pre>
+
+<h4>Coisas importantes:</h4>
+<ul>
+  <li><code>string?</code> significa "pode ser null" (nulo, vazio). <code>string</code> não pode.</li>
+  <li><code>{ get; set; }</code> é uma "propriedade" — como uma variável de uma classe.</li>
+  <li><code>Guid</code> é um identificador único global (uma string tipo <code>a1b2c3d4-e5f6-...</code>).</li>
+</ul>
+
+<h2>3.3 Minimal APIs: menos código, mais foco</h2>
+<p>Antigamente em .NET a gente escrevia <strong>Controllers</strong> — classes cheias de decoração e ceremony. Desde o .NET 6, tem o estilo <strong>Minimal APIs</strong> que é bem mais direto:</p>
+
+<pre><code><span class="cm">// Program.cs</span>
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapGet("/", () =&gt; "Olá, mundo!");
+
+app.MapPost("/api/v1/alunos", async (Aluno aluno, AppDbContext db) =&gt;
+{
+    db.Alunos.Add(aluno);
+    await db.SaveChangesAsync();
+    return Results.Created($"/alunos/{aluno.Id}", aluno);
+});
+
+app.Run();</code></pre>
+
+<p>Pronto. Isso é uma API funcional. Compara com o antigo (Controller) que exigia 30 linhas pra fazer o mesmo — dá pra sentir a diferença.</p>
+
+<h2>3.4 Injeção de dependência (DI)</h2>
+<p>Perceba que o método POST recebe <code>Aluno aluno</code> (o body da requisição) <strong>e também</strong> <code>AppDbContext db</code>. Esse <code>db</code> não vem do body — vem da <strong>caixa de brinquedos</strong> que o ASP.NET Core mantém.</p>
+
+<p>Você <em>registra</em> os serviços que sua app precisa lá no <code>Program.cs</code>:</p>
+
+<pre><code>builder.Services.AddDbContext&lt;AppDbContext&gt;(o =&gt; o.UseNpgsql(connectionString));
+builder.Services.AddScoped&lt;JwtTokenService&gt;();
+builder.Services.AddHttpClient&lt;EfiClient&gt;();</code></pre>
+
+<p>Aí, sempre que algum lugar pedir <code>AppDbContext db</code>, o framework <em>injeta</em> uma instância. Isso é <strong>Injeção de Dependência</strong>, e serve pra:</p>
+<ul>
+  <li><strong>Trocar implementações</strong> facilmente (em teste, você injeta um banco fake).</li>
+  <li><strong>Não repetir</strong> o código de criar dependências manualmente.</li>
+  <li><strong>Gerenciar ciclo de vida</strong>: <code>Scoped</code> vive uma requisição, <code>Singleton</code> vive a app inteira, <code>Transient</code> é uma nova a cada uso.</li>
+</ul>
+
+<div class="analogy">
+  <span class="label">Analogia</span>
+  <p>Imagina uma cozinha profissional. O chef não vai até o mercado comprar cebola cada vez que precisa. O <em>copeiro</em> deixa a cebola preparada no lugar certo. Injeção de dependência é o copeiro do seu código.</p>
+</div>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p4" class="part">Parte IV</h1>
+<p class="part-sub">Onde os dados moram: banco de dados</p>
+
+<h2>4.1 Por que um banco de dados?</h2>
+<p>Você poderia salvar tudo em arquivos <code>.txt</code> ou <code>.json</code>. Por que não? Porque:</p>
+<ul>
+  <li><strong>Consultas</strong>: quer os alunos da turma X ordenados por nome. Em arquivo, você programa isso na mão. Em banco, você pede em <strong>SQL</strong> e o banco faz.</li>
+  <li><strong>Concorrência</strong>: 10 pessoas tentando salvar ao mesmo tempo → arquivo corrompe. Banco resolve com <em>transações</em>.</li>
+  <li><strong>Integridade</strong>: você define regras ("todo aluno tem que ter uma turma") e o banco não deixa quebrar.</li>
+</ul>
+
+<h2>4.2 SQL em cinco minutos</h2>
+<p><strong>SQL</strong> é a linguagem pra falar com bancos relacionais. É <em>declarativa</em>: você diz <em>o que quer</em>, não <em>como fazer</em>.</p>
+
+<pre><code>SELECT nome, email
+FROM alunos
+WHERE turma_id = 'abc-123'
+ORDER BY nome ASC;</code></pre>
+
+<p>Traduzindo: "me devolva o nome e o email dos alunos que estão na turma abc-123, ordenados por nome, ascendente."</p>
+
+<h2>4.3 PostgreSQL: nosso banco</h2>
+<p>Escolhemos o <strong>PostgreSQL</strong> (ou "Postgres"). É open source, gratuito, respeita padrões, tem tudo que precisa (JSON nativo, transações, extensões). É a escolha "boring" que dá certo em 95% dos casos.</p>
+
+<p>Alternativas: <strong>MySQL</strong> (também bom), <strong>SQLite</strong> (arquivo único, ótimo pra prototipagem), <strong>SQL Server</strong> (da Microsoft, forte na Microsoft).</p>
+
+<h2>4.4 ORM: falando com o banco em C#</h2>
+<p>Escrever SQL na mão em C# é chato e propenso a erros. Um <strong>ORM</strong> (Object-Relational Mapper) traduz classes C# em SQL automaticamente. A gente usa o <strong>Entity Framework Core</strong>.</p>
+
+<pre><code><span class="cm">// em C#</span>
+var alunos = await db.Alunos
+    .Where(a =&gt; a.TurmaId == turmaId)
+    .OrderBy(a =&gt; a.NomeCompleto)
+    .ToListAsync();
+
+<span class="cm">// o EF traduz pra SQL:</span>
+<span class="cm">// SELECT * FROM alunos WHERE turma_id = @p0 ORDER BY nome_completo ASC</span></code></pre>
+
+<p>Vantagem: <strong>autocomplete</strong>, <strong>type safety</strong> (se você trocar o nome de uma coluna, o código quebra na hora certa).</p>
+<p>Desvantagem: em queries muito complexas, o SQL gerado pode ficar bobo. Aí você escreve SQL na mão mesmo.</p>
+
+<h2>4.5 Migrations: versionando o banco</h2>
+<p>Cada mudança na estrutura do banco (nova tabela, nova coluna, novo índice) é uma <strong>migration</strong>. É um arquivo C# que descreve a mudança <em>e</em> como desfazer.</p>
+
+<pre><code>dotnet ef migrations add AdicionarTelefoneAluno</code></pre>
+
+<p>Isso gera um arquivo em <code>src/FormaturasFlow.Api/Migrations/</code>. Quando a aplicação sobe, ela roda <code>db.Database.MigrateAsync()</code> que aplica todas as migrations pendentes.</p>
+
+<div class="callout warn">
+  <span class="label">Cuidado</span>
+  <p>Você <strong>NUNCA</strong> deve editar uma migration que já foi aplicada em produção. Se precisa mudar, cria uma nova. Editar uma migration antiga é o caminho pra corromper o banco em produção.</p>
+</div>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p5" class="part">Parte V</h1>
+<p class="part-sub">Autenticação e autorização</p>
+
+<h2>5.1 Autenticação vs autorização</h2>
+<table>
+  <tr><th>Autenticação</th><th>Autorização</th></tr>
+  <tr><td>“Quem é você?”</td><td>“O que você pode fazer?”</td></tr>
+  <tr><td>Login com email/senha</td><td>Só admin pode deletar turma</td></tr>
+</table>
+
+<p>Primeiro autentica (identifica), depois autoriza (verifica permissão).</p>
+
+<h2>5.2 Password hashing (não guarde senha em texto puro!)</h2>
+<p>Se você guarda a senha do usuário como texto no banco, e o banco vazar, todas as senhas ficam expostas. E como as pessoas reusam senhas, isso vaza contas em outros sites também.</p>
+
+<p>A solução: <strong>hash</strong>. Um hash é uma função <strong>de mão única</strong>: fácil de calcular (senha → hash), impossível de reverter (hash → senha). No banco você guarda só o hash. Quando o usuário loga, você hasheia a senha que ele digitou e compara com o hash guardado.</p>
+
+<p>O ASP.NET Core Identity faz isso pra gente com <strong>PBKDF2</strong> — um algoritmo de hash que ainda por cima é <em>lento</em> de propósito (dificulta força bruta). Nem precisa pensar: usar <code>UserManager&lt;T&gt;.CreateAsync(user, password)</code> já cuida disso.</p>
+
+<h2>5.3 JWT: o crachá do usuário</h2>
+<p>Depois que o usuário loga, o servidor devolve um <strong>JWT</strong> (JSON Web Token). É uma string longa dividida em 3 partes por pontos.</p>
+
+<pre><code>eyJhbGciOi...   <span class="cm"># cabeçalho (qual algoritmo)</span>
+.
+eyJzdWIiOi...   <span class="cm"># payload (claims: id do user, email, roles, expiração)</span>
+.
+xkY6f4b...      <span class="cm"># assinatura (garante que ninguém adulterou)</span></code></pre>
+
+<p>O cliente guarda esse token e envia em cada requisição no header:</p>
+
+<pre><code>GET /api/v1/turmas
+Authorization: Bearer eyJhbGciOi...</code></pre>
+
+<p>O servidor <strong>não precisa consultar o banco</strong> pra saber quem é o usuário — a assinatura HMAC garante que o token não foi adulterado. Isso escala muito bem.</p>
+
+<div class="callout warn">
+  <span class="label">Cuidado com JWT</span>
+  <p>JWT tem uma <strong>data de expiração</strong> mas <strong>não pode ser revogado</strong> antes disso (a menos que você mantenha uma "blocklist" no banco, o que anula a vantagem). Por isso, tokens de acesso devem durar pouco (15-60min) e você usa um <strong>refresh token</strong> pra renovar.</p>
+</div>
+
+<h2>5.4 Roles: quem pode o quê</h2>
+<p>No nosso projeto temos 3 papéis:</p>
+<ul>
+  <li><strong>super_admin</strong> — pode tudo, inclusive deletar</li>
+  <li><strong>funcionario</strong> — pode criar/editar mas não deletar</li>
+  <li><strong>aluno</strong> — pode ver seus próprios dados</li>
+</ul>
+
+<p>Em cada endpoint, a gente exige um papel:</p>
+
+<pre><code>group.MapDelete("/{id:guid}", DeleteAsync)
+    .RequireAuthorization(p =&gt; p.RequireRole(Roles.SuperAdmin));</code></pre>
+
+<p>Se um <code>funcionario</code> tentar chamar esse endpoint, ele recebe <strong>403 Forbidden</strong>. Se não estiver logado, <strong>401 Unauthorized</strong>.</p>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p6" class="part">Parte VI</h1>
+<p class="part-sub">Integrando com serviços externos (a Efí Bank)</p>
+
+<h2>6.1 Por que precisamos de um PSP?</h2>
+<p><strong>PSP</strong> (Payment Service Provider) é uma empresa que resolve o pesadelo de receber pagamentos. Sem PSP você teria que integrar com cada banco, cada bandeira, cuidar de compliance PCI, etc. Com PSP você chama uma API e ele faz o resto.</p>
+
+<p>Escolhemos a <strong>Efí Bank</strong> (antiga Gerencianet). Emitir boleto, gerar QR Code de PIX e receber webhook quando o cliente paga.</p>
+
+<h2>6.2 mTLS: certificado dos dois lados</h2>
+<p>Numa conexão HTTPS normal, só o servidor apresenta um certificado (é assim que você tem certeza que está falando com o banco.com e não um site falso). No <strong>mTLS</strong> (mutual TLS), o <strong>cliente</strong> também apresenta um certificado. É como se você e o site trocassem carteiras de identidade.</p>
+
+<p>A Efí exige mTLS. Eles te dão um arquivo <code>.p12</code> (o certificado) e você anexa em cada requisição. No nosso código, isso está encapsulado num <strong>HttpMessageHandler</strong>:</p>
+
+<pre><code>public class EfiHttpHandler : HttpClientHandler
+{
+    public EfiHttpHandler(IOptions&lt;EfiOptions&gt; opt)
+    {
+        var raw = Convert.FromBase64String(opt.Value.CertificateBase64);
+        var cert = X509CertificateLoader.LoadPkcs12(raw, opt.Value.CertificatePassword);
+        ClientCertificates.Add(cert);
+    }
+}</code></pre>
+
+<h2>6.3 Webhooks: quando o servidor "liga" pra gente</h2>
+<p>Normalmente é você quem chama a Efí ("emita esse boleto"). Mas quando o cliente <em>paga</em>, <strong>a Efí é que precisa avisar você</strong>. Ela não pode ficar esperando você perguntar — não escalaria. Então ela usa um <strong>webhook</strong>: quando o pagamento acontece, ela chama uma URL sua (que você cadastrou no painel dela).</p>
+
+<pre><code>POST http://api.formaturasflow.com/webhooks/efi?secret=xyz
+{ "pix": [{ "txid": "abc123", "valor": "150.00" }] }</code></pre>
+
+<h2>6.4 Idempotência: fazer 100x = fazer 1x</h2>
+<p>Webhooks podem ser <strong>reenviados</strong> se a Efí não receber a resposta 200 rápido o suficiente. Se você não protege, o mesmo pagamento pode ser aplicado 3 vezes → aluno pago 3x → dinheiro perdido.</p>
+
+<p>Idempotência = a operação pode ser feita várias vezes e o resultado é o mesmo. Implementamos assim:</p>
+
+<pre><code><span class="cm">// pega o ID único do evento vindo da Efí</span>
+var eventId = doc.RootElement.GetProperty("evento").GetProperty("id").ToString();
+
+<span class="cm">// se já processamos, ignora</span>
+var jaExiste = await db.WebhookEvents
+    .AnyAsync(w =&gt; w.Provider == "efi" &amp;&amp; w.EventId == eventId, ct);
+if (jaExiste) return Results.Ok(new { duplicado = true });
+
+<span class="cm">// senão, processa e guarda o eventId pro futuro</span>
+db.WebhookEvents.Add(new WebhookEvent { EventId = eventId, ... });</code></pre>
+
+<p>Simples e eficaz. <strong>Toda</strong> integração com PSP deve ter idempotência.</p>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p7" class="part">Parte VII</h1>
+<p class="part-sub">Empacotando com Docker</p>
+
+<h2>7.1 O problema que Docker resolve</h2>
+<p>"Na minha máquina funciona." — todo dev do mundo, uma vez na vida.</p>
+<p>Sua máquina tem .NET 10, uma versão específica do Postgres, umas variáveis de ambiente. A máquina de produção tem outra coisa. O programa quebra em produção porque o ambiente é diferente.</p>
+
+<p><strong>Docker</strong> resolve isso empacotando seu app <strong>junto com todo o ambiente</strong> num "container". O container roda igual em qualquer lugar.</p>
+
+<h2>7.2 Imagem vs Container</h2>
+<ul>
+  <li><strong>Imagem</strong> é o "molde", o "arquivo executável". Ex: <code>postgres:16-alpine</code>.</li>
+  <li><strong>Container</strong> é uma instância dessa imagem rodando. Você pode rodar 3 containers da mesma imagem.</li>
+</ul>
+
+<div class="analogy">
+  <span class="label">Analogia</span>
+  <p>Imagem é a receita de bolo. Container é o bolo pronto. Você pode fazer 10 bolos com a mesma receita.</p>
+</div>
+
+<h2>7.3 Dockerfile: a receita da nossa imagem</h2>
+<p>É um arquivo texto que descreve <strong>como construir</strong> a imagem passo a passo. O nosso resumido:</p>
+
+<pre><code><span class="cm"># Estágio 1: BUILD</span>
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY src/FormaturasFlow.Api/FormaturasFlow.Api.csproj src/FormaturasFlow.Api/
+RUN dotnet restore src/FormaturasFlow.Api/FormaturasFlow.Api.csproj
+COPY src/ src/
+RUN dotnet publish -c Release -o /app/publish
+
+<span class="cm"># Estágio 2: RUNTIME (bem menor)</span>
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /app/publish .
+USER app
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "FormaturasFlow.Api.dll"]</code></pre>
+
+<h4>Por que dois estágios?</h4>
+<ul>
+  <li>O estágio "build" tem o SDK do .NET (~800MB) — precisa pra compilar.</li>
+  <li>O estágio "runtime" tem só o runtime (~200MB) — o suficiente pra rodar.</li>
+  <li>A imagem final é a <strong>runtime</strong>, sem o peso do SDK. Ela puxa o binário compilado do estágio de build.</li>
+</ul>
+
+<h2>7.4 Docker Compose: vários containers</h2>
+<p>Um app real tem múltiplas peças: API, banco, cache, worker. O <strong>Compose</strong> descreve tudo isso em um arquivo <code>docker-compose.yml</code>.</p>
+
+<pre><code>services:
+  postgres:
+    image: postgres:16-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [internal]
+
+  api:
+    image: ghcr.io/joaoof/formaturas-api:latest
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports:
+      - "80:8080"
+    networks: [edge, internal]
+
+  watchtower:
+    image: nickfedor/watchtower:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock</code></pre>
+
+<p>Um único <code>docker compose up -d</code> sobe tudo, na ordem certa, na rede certa.</p>
+
+<h4>Volumes: persistência</h4>
+<p>Containers são "efêmeros" — se você mata o container, o que tava dentro dele some. Pro banco isso é catástrofe. A solução é o <strong>volume</strong>: um pedaço do disco da máquina hospedeira que é montado dentro do container. Quando o container morre, o volume permanece.</p>
+
+<h4>Redes: isolamento</h4>
+<p>O nosso Postgres está numa rede chamada <code>internal</code> que é <code>internal: true</code>. Isso significa que só quem está nessa rede consegue falar com ele. A API está em <code>internal</code> (fala com Postgres) <strong>e</strong> em <code>edge</code> (fala com a internet). O Postgres nunca fica exposto na internet — ninguém de fora chega nele.</p>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p8" class="part">Parte VIII</h1>
+<p class="part-sub">Colocando de verdade num servidor na internet</p>
+
+<h2>8.1 VPS: um computador na nuvem</h2>
+<p>Uma <strong>VPS</strong> (Virtual Private Server) é um computador virtualizado que fica ligado 24h por dia num data center. Você aluga por mês. A nossa é uma Hostinger com Ubuntu 24.04 LTS.</p>
+
+<p>Diferença pra "hospedagem compartilhada" tradicional (tipo Locaweb): você tem <strong>controle total</strong>. Instala Linux, instala Docker, roda o que quiser.</p>
+
+<h2>8.2 SSH: acesso remoto criptografado</h2>
+<p>Você não vai até o data center digitar coisa no servidor. Você usa <strong>SSH</strong> (Secure Shell): um protocolo criptografado pra digitar comandos remotamente.</p>
+
+<pre><code>ssh root@191.101.78.252</code></pre>
+
+<h4>Chave pública vs chave privada</h4>
+<p>Senha é ruim. Um dia alguém adivinha. A alternativa é <strong>par de chaves</strong>:</p>
+<ul>
+  <li><strong>Chave privada</strong>: fica só no seu computador. NUNCA compartilha.</li>
+  <li><strong>Chave pública</strong>: você bota no servidor.</li>
+</ul>
+<p>Elas são matematicamente relacionadas. Só quem tem a privada consegue "provar" que é dono da pública. Ninguém consegue adivinhar a privada a partir da pública (leva mais que a idade do universo com toda energia do planeta).</p>
+
+<div class="callout tip">
+  <span class="label">Boa prática</span>
+  <p>Use <code>ed25519</code> (algoritmo moderno) e nunca use RSA de menos de 4096 bits. Nossa chave é ed25519 — mais curta, mais rápida, mais segura.</p>
+</div>
+
+<h2>8.3 Firewall: fechar tudo, abrir só o essencial</h2>
+<p>Por padrão, um Linux "cru" tem várias portas abertas. Cada porta aberta é uma superfície de ataque. Regra de ouro: <strong>feche tudo, abra só o que precisa</strong>.</p>
+
+<pre><code>ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp    <span class="cm"># SSH pra nós entrarmos</span>
+ufw allow 80/tcp    <span class="cm"># HTTP pra API responder</span>
+ufw enable</code></pre>
+
+<h2>8.4 Fail2ban: banindo quem chuta senha</h2>
+<p>Mesmo com SSH por chave, tem gente chutando senha na porta 22 o tempo todo (é bot varrendo a internet). O <strong>fail2ban</strong> monitora tentativas falhas e bane o IP por X minutos depois de Y tentativas.</p>
+
+<p>Ele já vem com uma configuração padrão razoável. Só precisa ligar: <code>systemctl enable --now fail2ban</code>.</p>
+
+<h2>8.5 Usuário deploy (nunca rodar como root)</h2>
+<p>O <code>root</code> pode tudo. Se um app rodando como root é comprometido, o atacante ganha o servidor inteiro. Boa prática: criar um usuário sem privilégios (<code>deploy</code>), rodar o Docker como ele.</p>
+
+<p>Depois de tudo configurado, ainda desabilitamos:</p>
+<pre><code>PermitRootLogin no          <span class="cm"># root não pode logar via SSH</span>
+PasswordAuthentication no   <span class="cm"># ninguém loga por senha, só chave</span></code></pre>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p9" class="part">Parte IX</h1>
+<p class="part-sub">CI/CD: automação total do deploy</p>
+
+<h2>9.1 O que é CI/CD</h2>
+<ul>
+  <li><strong>CI (Continuous Integration)</strong>: cada mudança é testada automaticamente. Se quebrar, você é avisado.</li>
+  <li><strong>CD (Continuous Deployment)</strong>: se passar nos testes, é publicada automaticamente.</li>
+</ul>
+
+<p>Antes do CI/CD, o dev empacotava manualmente, entrava no servidor por FTP, subia arquivo. Deixava o servidor 1 hora offline. Errava. Voltava atrás.</p>
+<p>Agora: <code>git push</code>. Em 2 minutos está no ar. Sem downtime perceptível.</p>
+
+<h2>9.2 GitHub Actions</h2>
+<p>É a plataforma de CI/CD do GitHub. Você escreve um arquivo YAML em <code>.github/workflows/</code> descrevendo os passos.</p>
+
+<pre><code>name: build-and-push
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: ghcr.io/joaoof/formaturas-api:latest</code></pre>
+
+<p>Traduzindo: "quando alguém der push na main, num Ubuntu limpo, checka o código, builda a imagem Docker, publica no GHCR".</p>
+
+<h2>9.3 GHCR: onde a imagem mora</h2>
+<p>GitHub Container Registry. É como um Google Drive, mas pra imagens Docker. Você publica lá com um token; puxa de lá com o mesmo token. Free tier tem 500MB, que é bastante pra APIs pequenas.</p>
+
+<h2>9.4 Watchtower: o gancho da automação</h2>
+<p>Aqui tá a mágica. O Watchtower é um container que:</p>
+<ol>
+  <li>A cada 60s, vai no GHCR</li>
+  <li>Vê se a imagem que ele monitora tem uma "digest" nova</li>
+  <li>Se tiver: puxa, para o container antigo, sobe o novo</li>
+</ol>
+
+<p>Se você combinar com o GitHub Actions, o fluxo completo é:</p>
+
+<pre><code>1. git push
+2. GitHub Actions builda (60-90s)
+3. Publica no GHCR
+4. Watchtower detecta em ≤60s
+5. Auto-update
+
+Total: ~2 minutos, sem SSH manual.</code></pre>
+
+<div class="callout warn">
+  <span class="label">Dor real que vivi</span>
+  <p>A imagem original <code>containrrr/watchtower</code> está <strong>abandonada</strong>. Ela usa uma API do Docker antiga que já não existe mais no Docker 29. Usamos o fork <code>nickfedor/watchtower</code> que é ativamente mantido. Se você não sabe disso, passa horas debugando "container restarting" sem saber por quê. Boa prática: <strong>verifica se as ferramentas que você usa estão vivas</strong>.</p>
+</div>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p10" class="part">Parte X</h1>
+<p class="part-sub">Testes: como dormir tranquilo à noite</p>
+
+<h2>10.1 Por que testar?</h2>
+<p>Sem testes, cada mudança no código é uma aposta. Você <em>acha</em> que não quebrou nada, mas não sabe. Aí em produção seu cliente reclama porque um botão parou de funcionar.</p>
+<p>Com testes, você <strong>prova</strong> que os fluxos essenciais funcionam. E a cada mudança, o teste roda de novo. Se quebrou algo, você descobre em segundos, não em produção.</p>
+
+<h2>10.2 Três níveis de teste</h2>
+
+<h3>Unit test (unitário)</h3>
+<p>Testa uma unidade isolada: uma função, um método. Não fala com banco, não fala com rede. Ultra rápido (milissegundos). Ex: testar que o rateio de parcelas divide direito.</p>
+
+<pre><code>[Fact]
+public void Divisao_Nao_Exata_Sobra_Centavos_Na_Ultima()
+{
+    var (parcela, resto) = Ratear(total: 100m, entrada: 0m, n: 3);
+    parcela.Should().Be(33.33m);
+    resto.Should().Be(0.01m);
+}</code></pre>
+
+<h3>Integration test (integração)</h3>
+<p>Testa peças juntas: API + banco de dados. Mais lento (segundos), mas prova que o sistema real funciona. A gente usa <strong>Testcontainers</strong>: sobe um Postgres real em Docker só pra rodar o teste.</p>
+
+<pre><code>[Fact]
+public async Task Primeiro_Register_Vira_Super_Admin()
+{
+    var http = factory.CreateClient();
+    var tok = await http.RegisterAsync("admin@ex.com", "SenhaForte1!", "Admin");
+    tok.Roles.Should().Contain("super_admin");
+}</code></pre>
+
+<h3>Smoke test (fumaça)</h3>
+<p>Testa contra o ambiente real (produção). Vale como "não morreu". Um script <code>bash</code> curto que faz:</p>
+<pre><code>curl http://api.formaturasflow.com/health
+# espera Healthy</code></pre>
+
+<h2>10.3 Pirâmide de testes</h2>
+<p>Muitos unitários. Alguns de integração. Poucos smokes. Assim:</p>
+
+<pre><code>       ┌─────┐
+       │smoke│         ← poucos, lentos, contra prod
+    ┌──┴─────┴──┐
+    │integration│      ← alguns, médios, com banco
+┌───┴───────────┴───┐
+│      unit tests      │  ← muitos, rápidos, isolados
+└───────────────────────┘</code></pre>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p11" class="part">Parte XI</h1>
+<p class="part-sub">Documentação viva: OpenAPI e Scalar</p>
+
+<p>Documentar API em Word é o começo da morte. Em 2 semanas o Word está desatualizado.</p>
+
+<p><strong>OpenAPI</strong> (antigo Swagger) é uma <em>especificação</em>: um JSON que descreve todos os endpoints, parâmetros, respostas. O ASP.NET Core gera esse JSON automaticamente a partir do próprio código. Você mexe no código → doc atualiza sozinha.</p>
+
+<p><strong>Scalar</strong> é uma UI moderna que consome esse JSON e renderiza uma página web com todos os endpoints, com botão "Try it" pra você testar direto do navegador.</p>
+
+<pre><code>app.MapOpenApi();
+app.MapScalarApiReference();</code></pre>
+
+<p>Duas linhas. Documentação clicável em <code>http://seu-ip/scalar/v1</code>.</p>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p12" class="part">Parte XII</h1>
+<p class="part-sub">Boas práticas: o que ainda vamos fazer</p>
+
+<h2>12.1 HTTPS (crítico)</h2>
+<p>Hoje a API está em HTTP puro. Toda senha que passa vai em texto na rede. Compra domínio, aponta pra VPS, coloca um <strong>Caddy</strong> ou <strong>Traefik</strong> na frente que resolve certificado Let's Encrypt automaticamente.</p>
+
+<h2>12.2 Backup automático</h2>
+<p>Se o disco da VPS morrer amanhã, perdemos tudo. Cron diário:</p>
+<pre><code>docker exec postgres pg_dump -U user db | gzip &gt; /backups/$(date +%F).sql.gz</code></pre>
+<p>E copia pro Backblaze B2 ou S3 (~R$2/mês).</p>
+
+<h2>12.3 Rate limiting</h2>
+<p><code>/auth/register</code> aberto = bot cria 10 mil contas em 30s. Rate limiting bloqueia N tentativas por IP por minuto.</p>
+
+<pre><code>builder.Services.AddRateLimiter(o =&gt; o.AddFixedWindowLimiter("auth", opt =&gt; {
+    opt.PermitLimit = 5;
+    opt.Window = TimeSpan.FromMinutes(1);
+}));</code></pre>
+
+<h2>12.4 Refresh tokens</h2>
+<p>Access token de 60 min. Se vazar, atacante tem 60 min de acesso. Refresh token de 7 dias, guardado com hash no banco, permite <strong>revogar</strong>. Se suspeitar de vazamento, remove o refresh token → conta bloqueada.</p>
+
+<h2>12.5 Logging estruturado</h2>
+<p>Log de texto puro é ruim de buscar. Log estruturado (JSON) permite buscar por qualquer campo:</p>
+<pre><code>{ "timestamp": "...", "level": "Error", "traceId": "abc", "message": "...", "userId": "xyz" }</code></pre>
+<p>Combinado com <strong>Serilog + Grafana Loki</strong> (grátis), você tem busca poderosa em produção.</p>
+
+<h2>12.6 Observabilidade</h2>
+<p>Metrics + Traces + Logs. Com <strong>OpenTelemetry</strong> você exporta tudo pro Grafana Cloud (free tier generoso). Aí você vê "endpoint X ficou 2× mais lento na última hora" antes do cliente reclamar.</p>
+
+<h2>12.7 Feature flags</h2>
+<p>Uma flag no banco liga/desliga funcionalidade sem deploy. Ideal pra rollout gradual. Ex: "novo cálculo de rateio ativa pra 10% dos contratos novos".</p>
+
+<h2>12.8 Rotação de segredos</h2>
+<p>Se você acha que um segredo vazou (ou vazou mesmo — nosso PAT ficou nesse chat), <strong>rotaciona</strong>. Cria segredo novo, atualiza <code>.env</code>, revoga o velho. Faz isso periodicamente mesmo sem suspeita.</p>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="p13" class="part">Parte XIII</h1>
+<p class="part-sub">Como pensar como um dev sênior</p>
+
+<h2>13.1 Decompor problemas</h2>
+<p>Um problema grande é intimidante. Divide em pedaços pequenos. "Fazer sistema de formaturas" é intimidante. "Fazer o endpoint <code>POST /alunos</code>" é fazível em 30 minutos. Vai peça por peça.</p>
+
+<h2>13.2 Ler o erro inteiro</h2>
+<p>90% dos bugs se resolvem lendo a mensagem de erro com atenção. A stack trace te diz o arquivo e a linha exata. Sério. <strong>Leia antes de perguntar.</strong></p>
+
+<h2>13.3 Chato é bom</h2>
+<p>Use tecnologias chatas, bem testadas, com comunidade grande. PostgreSQL em vez de "esse banco novo super rápido". C# em vez de "essa linguagem exótica". Não é sexy, mas você vai encontrar 10 mil respostas no Stack Overflow. Novidade em produção é dor.</p>
+
+<h2>13.4 Faça funcionar → faça direito → faça rápido</h2>
+<p>Nessa ordem. Primeiro faz o código funcionar minimamente. Depois refatora pra ficar limpo. Só otimiza performance quando tiver medindo — <em>premature optimization is the root of all evil</em>.</p>
+
+<h2>13.5 Aprenda por curiosidade, não por medo</h2>
+<p>Não decore listas de "10 padrões que todo dev precisa saber". Quando você encontrar um problema, aprenda o padrão que resolve ele. Fica na memória.</p>
+
+<h2>13.6 Programe todo dia, mesmo 30 min</h2>
+<p>Consistência bate intensidade. 30 min todo dia por 1 ano é infinitamente melhor que 8 horas num sábado por mês.</p>
+
+<h2>13.7 Escreva o que aprendeu</h2>
+<p>Blog, README no seu GitHub, notas no Notion. Escrever força você a organizar o pensamento. E dali a 2 anos você lê e agradece.</p>
+
+<div class="callout tip">
+  <span class="label">Grande resumo</span>
+  <p>Programação é <strong>resolver problemas com código</strong>. Sintaxe é secundária. Consegue explicar o problema em português claro? Metade do trabalho tá feito. Erro te ensina, chato te salva, consistência te leva longe.</p>
+</div>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="glossario">Glossário</h1>
+
+<dl class="glossary">
+  <dt>API</dt>
+  <dd>Application Programming Interface. Um "cardápio" que um sistema oferece para outros sistemas usarem.</dd>
+
+  <dt>Backend</dt>
+  <dd>A parte do sistema que roda no servidor. Não tem interface visual. Nossa API é o backend.</dd>
+
+  <dt>Bootstrap</dt>
+  <dd>O primeiro passo de configuração de um sistema, tipicamente automatizado por um script.</dd>
+
+  <dt>CI/CD</dt>
+  <dd>Integração Contínua / Entrega Contínua. Automação de testes e deploy a cada mudança.</dd>
+
+  <dt>Claim</dt>
+  <dd>Uma "declaração" dentro de um JWT. Ex: "esse token pertence ao user X".</dd>
+
+  <dt>Container</dt>
+  <dd>Um "pacote" isolado que contém uma aplicação e tudo que ela precisa pra rodar.</dd>
+
+  <dt>DI (Dependency Injection)</dt>
+  <dd>Padrão onde as dependências são "injetadas" pelo framework em vez de instanciadas manualmente.</dd>
+
+  <dt>DTO (Data Transfer Object)</dt>
+  <dd>Objeto simples pra transportar dados entre camadas. Não tem lógica, só campos.</dd>
+
+  <dt>Endpoint</dt>
+  <dd>Uma URL específica de uma API. Ex: <code>POST /api/v1/alunos</code>.</dd>
+
+  <dt>Entity Framework</dt>
+  <dd>ORM oficial da Microsoft pra .NET. Traduz classes C# em SQL.</dd>
+
+  <dt>Firewall</dt>
+  <dd>"Parede" que filtra tráfego de rede. UFW é o firewall que a gente usa.</dd>
+
+  <dt>Frontend</dt>
+  <dd>A parte visual. O site, o app. Consome o backend via API.</dd>
+
+  <dt>GHCR</dt>
+  <dd>GitHub Container Registry. Onde a gente publica as imagens Docker.</dd>
+
+  <dt>Hash</dt>
+  <dd>Função matemática de mão única. Usada pra guardar senhas, checksums, etc.</dd>
+
+  <dt>HMAC</dt>
+  <dd>Hash com uma chave secreta. Usado pra assinar JWTs.</dd>
+
+  <dt>HTTP</dt>
+  <dd>HyperText Transfer Protocol. O idioma da web moderna.</dd>
+
+  <dt>HTTPS</dt>
+  <dd>HTTP + criptografia. Todo tráfego é encriptado. Obrigatório em produção.</dd>
+
+  <dt>Idempotência</dt>
+  <dd>Propriedade de uma operação: fazer 1x ou 100x produz o mesmo resultado.</dd>
+
+  <dt>JSON</dt>
+  <dd>Formato de dados em texto. Chave-valor, aninhado. Universal na web.</dd>
+
+  <dt>JWT</dt>
+  <dd>JSON Web Token. Token assinado que carrega informações do usuário.</dd>
+
+  <dt>Migration</dt>
+  <dd>Um script versionado que altera a estrutura do banco de dados.</dd>
+
+  <dt>mTLS</dt>
+  <dd>Mutual TLS. Ambos os lados apresentam certificado. Extra segurança.</dd>
+
+  <dt>OpenAPI</dt>
+  <dd>Especificação padrão pra descrever APIs REST. Gera documentação automática.</dd>
+
+  <dt>ORM</dt>
+  <dd>Object-Relational Mapper. Traduz classes de programação em SQL.</dd>
+
+  <dt>PSP</dt>
+  <dd>Payment Service Provider. Empresa que processa pagamentos (Efí, Stripe, PagSeguro).</dd>
+
+  <dt>REST</dt>
+  <dd>Padrão de design de API baseado em recursos e verbos HTTP.</dd>
+
+  <dt>Role</dt>
+  <dd>Papel do usuário no sistema. Define o que ele pode fazer.</dd>
+
+  <dt>Scalar</dt>
+  <dd>UI moderna pra explorar OpenAPI. Substituto do Swagger UI.</dd>
+
+  <dt>SSH</dt>
+  <dd>Secure Shell. Protocolo pra acessar servidor remoto de forma segura.</dd>
+
+  <dt>Testcontainers</dt>
+  <dd>Biblioteca que sobe containers Docker durante os testes automatizados.</dd>
+
+  <dt>VPS</dt>
+  <dd>Virtual Private Server. Um servidor virtual alugado num data center.</dd>
+
+  <dt>Watchtower</dt>
+  <dd>Programa que atualiza containers automaticamente quando há nova imagem.</dd>
+
+  <dt>Webhook</dt>
+  <dd>URL sua que um serviço externo chama quando algo acontece.</dd>
+
+  <dt>Workflow</dt>
+  <dd>Um pipeline de CI/CD. No GitHub Actions, um arquivo YAML em <code>.github/workflows/</code>.</dd>
+</dl>
+
+<hr />
+
+<!-- ===================================================== -->
+<h1 id="recursos">Recursos: onde continuar aprendendo</h1>
+
+<h2>Cursos em português</h2>
+<ul>
+  <li><strong>Curso em Vídeo</strong> (YouTube — Gustavo Guanabara): fundamentos de lógica, HTML/CSS, Python. Gratuito.</li>
+  <li><strong>Rocketseat</strong>: cursos gratuitos e pagos de Node.js, React, React Native, arquitetura.</li>
+  <li><strong>Full Cycle</strong> (fullcycle.com.br): Docker, Kubernetes, arquitetura distribuída. Nível intermediário/avançado.</li>
+  <li><strong>Balta.io</strong> (André Baltieri): C# e .NET com muita clareza.</li>
+</ul>
+
+<h2>Canais YouTube</h2>
+<ul>
+  <li><strong>Filipe Deschamps</strong>: explicações claras sobre conceitos, boas práticas, mercado.</li>
+  <li><strong>Fabio Akita</strong>: perspectiva histórica e crítica sobre tecnologia.</li>
+  <li><strong>Rocketseat</strong>: séries práticas construindo coisas do zero.</li>
+  <li><strong>Diolinux</strong>: Linux e ferramentas de dev.</li>
+  <li><strong>Ben Awad</strong> (inglês): fullstack moderno com humor.</li>
+</ul>
+
+<h2>Livros que valem a leitura</h2>
+<ul>
+  <li><em>The Pragmatic Programmer</em> — Dave Thomas &amp; Andy Hunt. Bíblia da mentalidade.</li>
+  <li><em>Clean Code</em> — Robert C. Martin. Como escrever código legível (com pitadas de exagero, mas 80% ouro).</li>
+  <li><em>The Linux Command Line</em> — William Shotts. Grátis em linuxcommand.org.</li>
+  <li><em>Designing Data-Intensive Applications</em> — Martin Kleppmann. Depois de 1 ano codando, essa é a próxima parada.</li>
+  <li><em>Você não é uma máquina</em> — Isabela Delgado. Sobre carreira, saúde mental, burnout. Sério, leia.</li>
+</ul>
+
+<h2>Sites que você vai amar</h2>
+<ul>
+  <li><strong>Stack Overflow</strong>: pra dúvidas técnicas. Copie o erro exato, cole no Google.</li>
+  <li><strong>DevDocs.io</strong>: documentação de várias linguagens agregada.</li>
+  <li><strong>MDN Web Docs</strong>: bíblia de HTML/CSS/JavaScript da Mozilla.</li>
+  <li><strong>Microsoft Learn</strong>: documentação de C# e .NET, muitos tutoriais.</li>
+  <li><strong>Exercism.io</strong>: exercícios de código com mentores humanos.</li>
+</ul>
+
+<h2>Comunidades brasileiras</h2>
+<ul>
+  <li><strong>Comunidade .NET Brasil</strong> (Discord/Twitter)</li>
+  <li><strong>Rocketseat Discord</strong>: gigante, ativa, para JS/TS/Node/React.</li>
+  <li><strong>DEV.to</strong>: blog de devs, tem muita gente brasileira publicando.</li>
+</ul>
+
+<h2>O que fazer agora</h2>
+<ol>
+  <li>Escolhe UM projeto pequeno e faz do zero (calculadora, todo list, API de recados).</li>
+  <li>Publica no GitHub, mesmo que feio. Consistência bate perfeição.</li>
+  <li>Escreve um README explicando o projeto. Isso força você a estruturar o que fez.</li>
+  <li>Faz o próximo. Um pouco mais ambicioso. Sempre um pouquinho maior.</li>
+  <li>Não compare seu capítulo 1 com o capítulo 20 dos outros.</li>
+</ol>
+
+<div class="callout tip">
+  <span class="label">Última coisa</span>
+  <p>Você já fez algo que 99% das pessoas do mundo nunca fizeram: <strong>tem um sistema real, no ar, com CI/CD, testes, banco de dados, autenticação, integração com pagamento</strong>. Isso é muito. Mesmo que ainda pareça mágica no seu ponto de vista, é seu.</p>
+  <p>Não desanima quando ver dev "sênior" fazendo coisas complexas. Ninguém nasce sabendo. A diferença é que ele começou 5 anos atrás e nunca parou. Você começou agora. Daqui a 5 anos, alguém vai olhar pra você e falar "cara, isso é mágica" — e vai ser porque você não parou.</p>
+</div>
+
+<footer>
+  Guia completo escrito com carinho para acompanhar o projeto <strong>FormaturasFlow.Api</strong>.<br />
+  Fonte: <a href="https://fonts.google.com/specimen/Poppins">Poppins</a> · Código: <a href="https://fonts.google.com/specimen/JetBrains+Mono">JetBrains Mono</a>.<br />
+  Para exportar como PDF: abra no navegador e aperte <strong>Ctrl+P → Salvar como PDF</strong>.
+</footer>
+
+</main>
+</body>
+</html>
