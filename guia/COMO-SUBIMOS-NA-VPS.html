@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<title>Como colocamos a API no ar — Guia para iniciantes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1a1a2e;
+    --muted: #5c6079;
+    --accent: #6366f1;
+    --accent-soft: #eef2ff;
+    --success: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --code-bg: #0f172a;
+    --code-ink: #e2e8f0;
+    --card: #f9fafb;
+    --border: #e5e7eb;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 400;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.7;
+    margin: 0;
+    padding: 48px 24px;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+
+  h1 {
+    font-weight: 800;
+    font-size: 42px;
+    line-height: 1.2;
+    margin: 0 0 8px 0;
+    background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  h2 {
+    font-weight: 700;
+    font-size: 28px;
+    margin-top: 56px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid var(--accent-soft);
+  }
+  h3 {
+    font-weight: 600;
+    font-size: 20px;
+    margin-top: 32px;
+    margin-bottom: 8px;
+    color: var(--accent);
+  }
+  p { margin: 0 0 16px 0; }
+  strong { font-weight: 600; color: var(--ink); }
+  em { color: var(--muted); font-style: italic; }
+
+  .subtitle {
+    font-weight: 500;
+    color: var(--muted);
+    font-size: 18px;
+    margin-bottom: 40px;
+  }
+
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 16px 20px;
+    border-radius: 4px;
+    margin: 24px 0;
+  }
+  .callout.warn { border-color: var(--warn); background: #fef3c7; }
+  .callout.tip  { border-color: var(--success); background: #d1fae5; }
+  .callout p:last-child { margin: 0; }
+
+  .term {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 12px 0;
+  }
+  .term h4 {
+    margin: 0 0 8px 0;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--accent);
+  }
+  .term p { margin: 0 0 8px 0; }
+  .term .search {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .term .search::before { content: "🔍 "; }
+
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 18px 22px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 16px 0;
+  }
+  pre code { background: transparent; color: inherit; padding: 0; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 16px;
+    margin: 24px 0;
+    align-items: start;
+  }
+  .step-num {
+    background: var(--accent);
+    color: white;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+  }
+  .step-body h3 { margin-top: 0; }
+
+  ul { padding-left: 20px; margin: 0 0 16px 0; }
+  li { margin-bottom: 8px; }
+
+  .toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 28px;
+    margin: 32px 0;
+  }
+  .toc h3 { margin-top: 0; color: var(--ink); }
+  .toc ol { padding-left: 20px; }
+  .toc a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .toc a:hover { text-decoration: underline; }
+
+  footer {
+    margin-top: 80px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+  }
+
+  @media print {
+    body { padding: 20px 0; }
+    h2 { page-break-after: avoid; }
+    .step, .term, .callout, pre { page-break-inside: avoid; }
+    a { color: var(--accent); }
+    pre { font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Como colocamos uma API na internet</h1>
+<p class="subtitle">Um guia sem enrolação para quem tá começando em programação — explica o que foi feito passo a passo e dá as palavras-chave pra você pesquisar cada conceito depois.</p>
+
+<div class="toc">
+  <h3>O que você vai encontrar aqui</h3>
+  <ol>
+    <li><a href="#objetivo">O que a gente queria fazer</a></li>
+    <li><a href="#conceitos">Palavras que você precisa entender</a></li>
+    <li><a href="#passos">O que a gente fez, passo a passo</a></li>
+    <li><a href="#como-usar">Como usar a API que subimos</a></li>
+    <li><a href="#magica">A mágica: deploy automático</a></li>
+    <li><a href="#aprender">Onde aprender mais</a></li>
+  </ol>
+</div>
+
+<h2 id="objetivo">1. O que a gente queria fazer</h2>
+<p>Colocar uma <strong>API</strong> (um programa que responde a requisições pela internet) rodando 24 horas por dia, num servidor lá longe, para que qualquer pessoa pudesse acessar pelo endereço <code>http://191.101.78.252</code>.</p>
+
+<p>E mais: a gente queria que, toda vez que alguém alterasse o código no GitHub, a versão nova <strong>subisse automaticamente</strong> — sem precisar mexer no servidor de novo.</p>
+
+<div class="callout">
+  <strong>Analogia:</strong> É como se você criasse um site num caderno, e cada vez que trocasse uma frase no caderno, todas as impressões espalhadas pelo mundo se atualizassem sozinhas. 🪄
+</div>
+
+<h2 id="conceitos">2. Palavras que você precisa entender</h2>
+<p>Antes de mostrar o passo a passo, aqui está uma lista de termos técnicos com uma explicação bem simples de cada um. Para cada palavra, sugiro o que você deve pesquisar para se aprofundar.</p>
+
+<div class="term">
+  <h4>VPS (Virtual Private Server)</h4>
+  <p>Um <strong>computador que fica ligado 24h por dia numa empresa de hospedagem</strong>. Você aluga ele por mês (~R$25) e tem acesso remoto como se fosse a sua máquina. Diferente do "hospedagem de site tradicional", aqui você é o dono, instala o que quiser.</p>
+  <p class="search">Pesquise: <em>"o que é uma vps", "vps vs hospedagem compartilhada", "melhores provedores de vps para iniciantes"</em></p>
+</div>
+
+<div class="term">
+  <h4>SSH (Secure Shell)</h4>
+  <p>É como se fosse um <strong>controle remoto criptografado</strong> que te deixa digitar comandos na VPS a partir da sua máquina. Você não fica olhando a tela dela: você digita e o que digitou é executado lá.</p>
+  <p class="search">Pesquise: <em>"como funciona ssh", "ssh chave publica privada", "openssh windows"</em></p>
+</div>
+
+<div class="term">
+  <h4>Docker</h4>
+  <p>Um programa que empacota sua aplicação junto com <strong>tudo que ela precisa para rodar</strong> (o .NET, as bibliotecas, o sistema) num pacote chamado <strong>container</strong>. O container roda igual em qualquer computador — mata o famoso "na minha máquina funciona".</p>
+  <p class="search">Pesquise: <em>"o que é docker", "docker container vs vm", "dockerfile explicação"</em></p>
+</div>
+
+<div class="term">
+  <h4>Docker Compose</h4>
+  <p>Um arquivo YAML (<code>docker-compose.yml</code>) que descreve <strong>vários containers rodando juntos</strong>. No nosso caso: um pra API, um pro banco de dados PostgreSQL, e um pro Watchtower (o "atualizador automático").</p>
+  <p class="search">Pesquise: <em>"docker compose para que serve", "docker-compose.yml exemplo"</em></p>
+</div>
+
+<div class="term">
+  <h4>Container Registry (GHCR)</h4>
+  <p>Um lugar na internet que <strong>guarda as versões das suas imagens Docker</strong>, tipo um "Google Drive" mas para containers. Usamos o <strong>GHCR</strong>, que é o registry do GitHub e é grátis pra repositórios pequenos.</p>
+  <p class="search">Pesquise: <em>"github container registry", "docker registry o que é"</em></p>
+</div>
+
+<div class="term">
+  <h4>CI/CD (Integração e Entrega Contínuas)</h4>
+  <p>Uma automação que, quando você faz <code>git push</code>, <strong>uma máquina do GitHub roda os testes, monta o container e publica em algum lugar</strong>. Você não precisa buildar nada manualmente.</p>
+  <p class="search">Pesquise: <em>"o que é ci cd", "github actions basico", "pipeline devops"</em></p>
+</div>
+
+<div class="term">
+  <h4>GitHub Actions</h4>
+  <p>O robô do GitHub que <strong>roda scripts (chamados de workflows) quando algo acontece no repositório</strong>. No nosso caso, quando alguém faz <code>push na branch main</code>, ele builda o container e publica.</p>
+  <p class="search">Pesquise: <em>"github actions tutorial", "yaml workflow github actions"</em></p>
+</div>
+
+<div class="term">
+  <h4>Watchtower</h4>
+  <p>Um programa que fica <strong>vigiando o GHCR de tempos em tempos</strong>. Quando ele vê que tem uma versão nova da API disponível, ele puxa e reinicia o container automaticamente. É o "olheiro" que a gente colocou na VPS.</p>
+  <p class="search">Pesquise: <em>"watchtower docker auto update", "nickfedor/watchtower github"</em></p>
+</div>
+
+<div class="term">
+  <h4>Firewall (UFW)</h4>
+  <p>Uma "parede" que <strong>filtra quais portas do servidor podem ser acessadas de fora</strong>. Fechamos tudo, e só deixamos abertas a 22 (SSH pra gente entrar) e a 80 (HTTP pra API responder).</p>
+  <p class="search">Pesquise: <em>"o que é firewall", "ufw ubuntu tutorial"</em></p>
+</div>
+
+<div class="term">
+  <h4>Fail2ban</h4>
+  <p>Um segurança que fica <strong>monitorando tentativas de invasão</strong>. Se alguém tenta chutar sua senha 5 vezes, o fail2ban bane o IP daquela pessoa por 10 minutos.</p>
+  <p class="search">Pesquise: <em>"fail2ban o que é", "protegendo ssh contra brute force"</em></p>
+</div>
+
+<h2 id="passos">3. O que a gente fez, passo a passo</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <h3>Alugamos a VPS</h3>
+    <p>Escolhemos uma VPS com <strong>Ubuntu 24.04 LTS</strong> (a versão estável do Linux). O provedor nos deu um <strong>IP público</strong> (<code>191.101.78.252</code>) e uma <strong>senha do usuário root</strong> (o "super-administrador" do Linux).</p>
+    <p class="search">Pesquise: <em>"ubuntu server iniciante", "linux vs windows server"</em></p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <h3>Geramos uma chave SSH</h3>
+    <p>Em vez de usar senha (que é fraca), a gente <strong>gerou uma "chave" criptográfica</strong> na máquina Windows. Isso cria dois arquivos: uma <strong>chave privada</strong> (que fica em segredo no seu computador) e uma <strong>chave pública</strong> (que a gente coloca na VPS).</p>
+    <pre><code>ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\id_ed25519 -N '""'</code></pre>
+    <p class="search">Pesquise: <em>"como gerar chave ssh ed25519", "chave publica x chave privada"</em></p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <h3>Conectamos na VPS pela primeira vez</h3>
+    <p>Usando a senha do root, a gente entrou na VPS. Dentro dela, <strong>colamos a chave pública no arquivo <code>authorized_keys</code></strong>. A partir daí, o SSH aceita a chave e não pede mais senha.</p>
+    <pre><code>ssh root@191.101.78.252
+# lá dentro:
+echo "SUA_CHAVE_PUBLICA" >> ~/.ssh/authorized_keys</code></pre>
+    <p class="search">Pesquise: <em>"ssh sem senha chave publica", "authorized_keys funcionamento"</em></p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-body">
+    <h3>Rodamos um script que preparou a VPS</h3>
+    <p>Escrevemos um script (<code>install.sh</code>) que faz <strong>tudo isso de uma vez</strong>:</p>
+    <ul>
+      <li>Atualiza o sistema operacional</li>
+      <li>Instala o Docker</li>
+      <li>Configura o firewall (só abre porta 22 e 80)</li>
+      <li>Liga o fail2ban</li>
+      <li>Cria um usuário <code>deploy</code> (o root nunca deveria rodar apps — má prática de segurança)</li>
+      <li>Desabilita login por senha e login como root pelo SSH</li>
+    </ul>
+    <p class="search">Pesquise: <em>"hardening ubuntu server", "principio do menor privilegio", "shell script bash tutorial"</em></p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-body">
+    <h3>Configuramos o "cofre" de segredos</h3>
+    <p>Na VPS, criamos um arquivo <code>.env</code> com as <strong>senhas e chaves secretas</strong> que a aplicação precisa: senha do banco de dados, chave para assinar tokens JWT, token do GitHub, etc. Esse arquivo <strong>nunca vai pro Git</strong> — fica só na VPS.</p>
+    <p class="search">Pesquise: <em>"variaveis de ambiente boas praticas", ".env arquivo o que é", "gitignore segredos"</em></p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">6</div>
+  <div class="step-body">
+    <h3>Subimos os containers</h3>
+    <p>Com o comando <code>docker compose up -d</code>, o Docker <strong>baixou as imagens da internet</strong>, criou 3 containers rodando ao mesmo tempo:</p>
+    <ul>
+      <li><strong>formaturas-api</strong> — a nossa aplicação .NET</li>
+      <li><strong>formaturas-postgres</strong> — o banco de dados</li>
+      <li><strong>formaturas-watchtower</strong> — o "atualizador automático"</li>
+    </ul>
+    <p class="search">Pesquise: <em>"docker compose up d flag", "postgresql docker volume persistente"</em></p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">7</div>
+  <div class="step-body">
+    <h3>Configuramos o CI/CD (a mágica)</h3>
+    <p>No GitHub, criamos um <strong>workflow</strong> (um arquivo em <code>.github/workflows/build-and-push.yml</code>) que roda toda vez que alguém faz <code>git push</code>. Esse workflow:</p>
+    <ul>
+      <li>Baixa o código</li>
+      <li>Builda a imagem Docker</li>
+      <li>Publica essa imagem no <strong>GHCR</strong> (Container Registry do GitHub)</li>
+    </ul>
+    <p class="search">Pesquise: <em>"github actions build docker", "docker buildx github actions"</em></p>
+  </div>
+</div>
+
+<h2 id="como-usar">4. Como usar a API que subimos</h2>
+<p>A API está no ar em <strong>http://191.101.78.252</strong>. Você pode acessar direto pelo navegador ou por ferramentas como Postman/Insomnia.</p>
+
+<h3>Página inicial (informação básica)</h3>
+<pre><code>http://191.101.78.252/</code></pre>
+
+<h3>Verificar se está funcionando (health check)</h3>
+<pre><code>http://191.101.78.252/health</code></pre>
+
+<h3>Documentação interativa dos endpoints (Scalar)</h3>
+<pre><code>http://191.101.78.252/scalar/v1</code></pre>
+<p>Essa página é sensacional: mostra todos os endpoints da API e permite testar direto do navegador. Você clica em <em>"Try it"</em>, preenche os dados, e a API responde na hora.</p>
+
+<div class="callout tip">
+  <strong>Testa agora:</strong> Abre <code>http://191.101.78.252/scalar/v1</code> no navegador. Vai ver todos os endpoints organizados por categoria (Auth, Turmas, Alunos, Contratos, Parcelas, Efi).
+</div>
+
+<h2 id="magica">5. A mágica: deploy automático</h2>
+<p>Depois de tudo configurado, o fluxo do dia-a-dia ficou <strong>ridiculamente simples</strong>:</p>
+
+<pre><code>1. Você edita o código no seu computador
+2. git add .
+3. git commit -m "mudanca X"
+4. git push origin main
+
+--- e é isso ---
+
+O GitHub Actions builda automaticamente (~1min)
+Publica a imagem nova no GHCR
+O Watchtower na VPS detecta em ≤60 segundos
+Reinicia o container com a versão nova
+A API atualizada está no ar em ~2 minutos</code></pre>
+
+<p>Você <strong>nunca mais precisa acessar a VPS</strong> para atualizar código. Tudo é automático.</p>
+
+<h2 id="aprender">6. Onde aprender mais</h2>
+
+<h3>Cursos gratuitos que recomendo</h3>
+<ul>
+  <li><strong>Curso em Vídeo (Gustavo Guanabara)</strong> — Fundamentos de programação, HTML/CSS, Python. Ótimo para começar.</li>
+  <li><strong>Rocketseat</strong> — Cursos gratuitos de web, mobile, Node.js. Muito visual e prático.</li>
+  <li><strong>Filipe Deschamps (YouTube)</strong> — Explicações claras sobre conceitos avançados.</li>
+  <li><strong>fullcycle.com.br</strong> — Docker, Kubernetes, arquitetura de sistemas.</li>
+</ul>
+
+<h3>Ordem sugerida de estudo (do zero até aqui)</h3>
+<ol>
+  <li>Lógica de programação (Python ou JavaScript)</li>
+  <li>Git e GitHub (fluxo de commits, branches, pull requests)</li>
+  <li>HTTP e APIs REST (verbos GET/POST/PUT/DELETE, JSON, status codes)</li>
+  <li>Linux básico (comandos de terminal, permissões)</li>
+  <li>SSH e servidores remotos</li>
+  <li>Docker (containers, images, volumes)</li>
+  <li>Docker Compose (múltiplos containers)</li>
+  <li>GitHub Actions (workflows, CI/CD)</li>
+  <li>Bancos de dados (PostgreSQL / SQL básico)</li>
+  <li>Boas práticas de segurança (chaves SSH, firewall, gerenciamento de segredos)</li>
+</ol>
+
+<h3>Livros que vão te fazer entender tudo</h3>
+<ul>
+  <li><em>"O Pragmático Programador"</em> — Dave Thomas & Andy Hunt (mentalidade de programador)</li>
+  <li><em>"Docker: Do desenvolvimento à produção"</em> — Casa do Código</li>
+  <li><em>"The Linux Command Line"</em> — William Shotts (grátis em linuxcommand.org)</li>
+</ul>
+
+<div class="callout warn">
+  <strong>Dica de ouro:</strong> não tente aprender tudo de uma vez. Escolhe um tópico, faz um mini-projeto, vê funcionando, aí vai pro próximo. A programação é uma escada — degrau por degrau.
+</div>
+
+<footer>
+  Documento gerado para acompanhar o deploy do FormaturasFlow.Api<br />
+  Se essa página estiver aberta no navegador, aperta <strong>Ctrl+P</strong> e escolhe "Salvar como PDF" para exportar.<br />
+  Fonte: <a href="https://fonts.google.com/specimen/Poppins">Poppins</a> (Google Fonts)
+</footer>
+
+</main>
+</body>
+</html>
