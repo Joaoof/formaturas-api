@@ -11,12 +11,29 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/auth").WithTags("Auth");
 
-        group.MapPost("/register", RegisterAsync);
-        group.MapPost("/login", LoginAsync);
-        group.MapGet("/me", MeAsync).RequireAuthorization();
+        group.MapPost("/register", RegisterAsync)
+            .WithSummary("Cria uma nova conta e emite JWT")
+            .WithDescription("O primeiro cadastro do sistema recebe o papel `super_admin` automaticamente. Os demais recebem `aluno`. Senha deve ter no mínimo 8 caracteres.")
+            .Produces<TokenResponse>(StatusCodes.Status200OK)
+            .ProducesValidationProblem();
+
+        group.MapPost("/login", LoginAsync)
+            .WithSummary("Autentica um usuário existente")
+            .WithDescription("Retorna um JWT válido por `Jwt:AccessTokenMinutes` minutos. Depois de 5 tentativas falhas, o usuário é bloqueado temporariamente.")
+            .Produces<TokenResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        group.MapGet("/me", MeAsync)
+            .RequireAuthorization()
+            .WithSummary("Retorna dados do usuário logado")
+            .WithDescription("Exige `Authorization: Bearer <token>`. Útil para o front descobrir quem está logado sem precisar decodar o JWT.")
+            .Produces<MeResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized);
 
         return app;
     }
+
+    public record MeResponse(Guid Id, string Email, string NomeCompleto, IEnumerable<string> Roles);
 
     public record RegisterRequest(
         [Required, EmailAddress] string Email,

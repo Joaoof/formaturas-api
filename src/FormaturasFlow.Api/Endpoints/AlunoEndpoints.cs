@@ -25,11 +25,40 @@ public static class AlunoEndpoints
     {
         var group = app.MapGroup("/alunos").WithTags("Alunos").RequireAuthorization();
 
-        group.MapGet("/", ListAsync);
-        group.MapGet("/{id:guid}", GetAsync);
-        group.MapPost("/", CreateAsync).RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario));
-        group.MapPut("/{id:guid}", UpdateAsync).RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario));
-        group.MapDelete("/{id:guid}", DeleteAsync).RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin));
+        group.MapGet("/", ListAsync)
+            .WithSummary("Lista alunos")
+            .WithDescription("Aceita filtro opcional `?turmaId=<guid>` para pegar apenas alunos de uma turma.")
+            .Produces<AlunoDto[]>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        group.MapGet("/{id:guid}", GetAsync)
+            .WithSummary("Detalhe de um aluno")
+            .WithDescription("Inclui contratos e parcelas do aluno.")
+            .Produces<Aluno>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapPost("/", CreateAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
+            .WithSummary("Cria um novo aluno em uma turma")
+            .WithDescription("A turma precisa existir. Requer papel `super_admin` ou `funcionario`.")
+            .Produces<Aluno>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden);
+
+        group.MapPut("/{id:guid}", UpdateAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
+            .WithSummary("Atualiza dados de um aluno")
+            .Produces<Aluno>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden);
+
+        group.MapDelete("/{id:guid}", DeleteAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin))
+            .WithSummary("Remove um aluno")
+            .WithDescription("Cascata: apaga também contratos e parcelas do aluno. Só `super_admin`.")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden);
 
         return app;
     }

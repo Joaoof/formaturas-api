@@ -15,11 +15,31 @@ public static class EfiEndpoints
     {
         app.MapPost("/parcelas/{id:guid}/cobranca", CriarCobrancaAsync)
             .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
-            .WithTags("Efi");
+            .WithTags("Efi")
+            .WithSummary("Emite uma cobrança (boleto ou PIX) na Efí Bank para a parcela")
+            .WithDescription("""
+                Body: `{ "tipo": "boleto" }` ou `{ "tipo": "pix" }`.
+                Idempotência local: se a parcela já tem `pspChargeId`, retorna a mesma sem gerar nova cobrança na Efí.
+                Retorna 409 se a parcela já foi paga.
+                Requer papel `super_admin` ou `funcionario`.
+                """)
+            .Produces<Parcela>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .Produces(StatusCodes.Status403Forbidden);
 
         app.MapPost("/webhooks/efi", WebhookEfiAsync)
             .AllowAnonymous()
-            .WithTags("Efi");
+            .WithTags("Efi")
+            .WithSummary("Webhook PÚBLICO da Efí — não chame direto")
+            .WithDescription("""
+                Chamado pela Efí quando um pagamento é confirmado.
+                Autenticação via `?secret=<segredo>` cadastrado no painel.
+                Idempotente: eventos duplicados retornam `{ "duplicado": true }`.
+                """)
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized);
 
         return app;
     }

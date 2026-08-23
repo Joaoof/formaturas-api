@@ -15,11 +15,40 @@ public static class TurmaEndpoints
     {
         var group = app.MapGroup("/turmas").WithTags("Turmas").RequireAuthorization();
 
-        group.MapGet("/", ListAsync);
-        group.MapGet("/{id:guid}", GetAsync);
-        group.MapPost("/", CreateAsync).RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario));
-        group.MapPut("/{id:guid}", UpdateAsync).RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario));
-        group.MapDelete("/{id:guid}", DeleteAsync).RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin));
+        group.MapGet("/", ListAsync)
+            .WithSummary("Lista todas as turmas")
+            .WithDescription("Cada item traz também `totalAlunos`.")
+            .Produces<TurmaDto[]>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        group.MapGet("/{id:guid}", GetAsync)
+            .WithSummary("Detalhe de uma turma")
+            .Produces<Turma>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        group.MapPost("/", CreateAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
+            .WithSummary("Cria uma nova turma")
+            .WithDescription("Requer papel `super_admin` ou `funcionario`.")
+            .Produces<Turma>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        group.MapPut("/{id:guid}", UpdateAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
+            .WithSummary("Atualiza uma turma existente")
+            .Produces<Turma>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden);
+
+        group.MapDelete("/{id:guid}", DeleteAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin))
+            .WithSummary("Remove uma turma")
+            .WithDescription("Cascata: apaga também os alunos vinculados. Só `super_admin`.")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden);
 
         return app;
     }
