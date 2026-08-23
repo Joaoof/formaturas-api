@@ -16,8 +16,7 @@ WORKDIR /app
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/* \
- && groupadd -r app && useradd -r -g app -u 1000 app
+ && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build --chown=app:app /app/publish .
 
