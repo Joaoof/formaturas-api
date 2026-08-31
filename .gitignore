@@ -7,7 +7,9 @@
 .env
 .env.*
 !.env.example
+!.env.hml.example
 deploy/.env
+deploy/.env.hml
 
 # ASP.NET Core local secrets — nunca versionar
 appsettings.Development.json

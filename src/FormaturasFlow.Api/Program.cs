@@ -3,6 +3,7 @@ using FormaturasFlow.Api.Auth;
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Efi;
 using FormaturasFlow.Api.Endpoints;
+using FormaturasFlow.Api.Payments;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<EfiOptions>(builder.Configuration.GetSection(EfiOptions.SectionName));
+builder.Services.Configure<AsaasOptions>(builder.Configuration.GetSection(AsaasOptions.SectionName));
+builder.Services.Configure<CoraOptions>(builder.Configuration.GetSection(CoraOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("ConnectionStrings:Default ausente.");
@@ -57,6 +60,22 @@ builder.Services.AddTransient<EfiHttpHandler>();
 builder.Services.AddHttpClient<EfiClient>()
     .ConfigurePrimaryHttpMessageHandler<EfiHttpHandler>();
 
+/*  Composition root do roteamento de pagamentos: este é o ÚNICO ponto
+    do sistema que conhece Asaas e Cora.  Endpoints e use cases veem
+    apenas IPaymentRouter, e a matriz de domínio × método é injetada
+    como dado (PaymentRoutingPolicy.Padrao).  */
+builder.Services.AddHttpClient<AsaasPaymentGateway>();
+
+builder.Services.AddTransient<CoraHttpHandler>();
+builder.Services.AddHttpClient<CoraPaymentGateway>()
+    .ConfigurePrimaryHttpMessageHandler<CoraHttpHandler>();
+
+builder.Services.AddTransient<IPaymentGateway>(sp => sp.GetRequiredService<AsaasPaymentGateway>());
+builder.Services.AddTransient<IPaymentGateway>(sp => sp.GetRequiredService<CoraPaymentGateway>());
+
+builder.Services.AddSingleton(PaymentRoutingPolicy.Padrao);
+builder.Services.AddScoped<IPaymentRouter, PaymentGatewayFactory>();
+
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 
@@ -65,6 +84,8 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<DomainExceptionHandler>();
+builder.Services.AddExceptionHandler<PaymentGatewayExceptionHandler>();
 
 var app = builder.Build();
 
@@ -102,6 +123,7 @@ v1.MapAlunoEndpoints();
 v1.MapContratoEndpoints();
 v1.MapParcelaEndpoints();
 v1.MapEfiEndpoints();
+v1.MapPaymentEndpoints();
 
 app.Run();
 

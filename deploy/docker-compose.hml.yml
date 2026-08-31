@@ -1,0 +1,92 @@
+#  Stack de HOMOLOGACAO — roda na mesma VPS que producao, isolada em
+#  projeto, rede, volume, porta e banco proprios.
+#
+#  Diferencas conscientes em relacao a producao:
+#   · imagem buildada da branch local (nao puxa do GHCR)
+#   · watchtower.enable=false: hml NUNCA se auto-atualiza, quem manda e
+#     o hml-up.sh; assim producao e homologacao nao se contaminam
+#   · porta 8081 (exige `sudo ufw allow 8081/tcp` na VPS)
+#   · banco proprio: derrubar e recriar hml nao encosta no dado de prod
+
+name: formaturasflow-hml
+
+networks:
+  edge-hml:
+  internal-hml:
+    internal: true
+
+volumes:
+  postgres_hml_data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: formaturas-hml-postgres
+    restart: unless-stopped
+    networks: [internal-hml]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-formaturas_hml}
+      POSTGRES_USER: ${POSTGRES_USER:-formaturas_hml}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.hml}
+      TZ: America/Sao_Paulo
+    volumes:
+      - postgres_hml_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-formaturas_hml} -d ${POSTGRES_DB:-formaturas_hml}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  api:
+    image: formaturasflow-api:hml
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: formaturas-hml-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [edge-hml, internal-hml]
+    ports:
+      - "8081:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Homologacao
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-formaturas_hml};Username=${POSTGRES_USER:-formaturas_hml};Password=${POSTGRES_PASSWORD}"
+      Jwt__Issuer: ${JWT_ISSUER:-http://191.101.78.252:8081}
+      Jwt__Audience: ${JWT_AUDIENCE:-formaturasflow-front-hml}
+      Jwt__Key: ${JWT_KEY:?defina JWT_KEY no .env.hml}
+      Jwt__AccessTokenMinutes: ${JWT_ACCESS_TOKEN_MINUTES:-60}
+      Efi__Sandbox: "true"
+      Efi__ClientId: ${EFI_CLIENT_ID:-}
+      Efi__ClientSecret: ${EFI_CLIENT_SECRET:-}
+      Efi__CertificateBase64: ${EFI_CERTIFICATE_BASE64:-}
+      Efi__CertificatePassword: ${EFI_CERTIFICATE_PASSWORD:-}
+      Efi__PixKey: ${EFI_PIX_KEY:-}
+      Efi__WebhookSecret: ${EFI_WEBHOOK_SECRET:-hml-webhook-secret}
+
+      #  Sandbox travado em true: homologacao nunca fala com PSP de
+      #  producao, mesmo que alguem cole a credencial errada no .env.
+      Asaas__Sandbox: "true"
+      Asaas__ApiKey: ${ASAAS_API_KEY:-}
+      Asaas__WebhookSecret: ${ASAAS_WEBHOOK_SECRET:-hml-webhook-secret}
+      Cora__Sandbox: "true"
+      Cora__ClientId: ${CORA_CLIENT_ID:-}
+      Cora__CertificateBase64: ${CORA_CERTIFICATE_BASE64:-}
+      Cora__CertificatePassword: ${CORA_CERTIFICATE_PASSWORD:-}
+      Cora__WebhookSecret: ${CORA_WEBHOOK_SECRET:-hml-webhook-secret}
+
+      Cors__Origins__0: ${CORS_ORIGIN_0:-http://localhost:5173}
+      TZ: America/Sao_Paulo
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"

@@ -94,6 +94,65 @@ curl -fsS http://localhost/health    # deve retornar 200
 docker logs formaturas-watchtower    # confirma polling
 ```
 
+## Ambiente de homologação (na mesma VPS)
+
+Homologação existe para testar código que **ainda não entrou em `main`** — por isso ela não usa GHCR nem Watchtower: builda a branch direto no host.
+
+```
+producao                          homologacao
+─────────────────────────────     ─────────────────────────────
+ghcr.io/:latest via Watchtower    build local da branch
+porta 80                          porta 8081
+formaturas-postgres               formaturas-hml-postgres
+volume postgres_data              volume postgres_hml_data
+ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_ENVIRONMENT=Homologacao
+watchtower.enable=true            watchtower.enable=false
+```
+
+Projeto, rede, volume, porta e banco são separados: derrubar e recriar a homologação não encosta no dado de produção, e o Watchtower nunca atualiza os containers de hml.
+
+### Primeira vez
+
+```bash
+sudo ufw allow 8081/tcp                     # UFW só libera 22 e 80 por padrão
+
+sudo -iu deploy
+git clone https://github.com/Joaoof/formaturas-api.git ~/formaturasflow-hml
+cd ~/formaturasflow-hml
+cp deploy/.env.hml.example deploy/.env.hml
+nano deploy/.env.hml                        # POSTGRES_PASSWORD e JWT_KEY são obrigatórios
+bash deploy/hml-up.sh main
+```
+
+### Atualizar / trocar de branch
+
+```bash
+sudo -iu deploy
+bash ~/formaturasflow-hml/deploy/hml-up.sh hml/roteamento-pagamentos
+```
+
+O script faz `fetch` + `reset --hard` na branch pedida, rebuilda a imagem, sobe a stack e espera o healthcheck. Se não ficar saudável em 2 min, ele despeja o log da API e sai com erro.
+
+### Verificar
+
+```bash
+curl -fsS http://localhost:8081/health
+curl -fsS http://localhost:8081/ | jq        # environment deve ser "Homologacao"
+docker compose -f deploy/docker-compose.hml.yml --env-file deploy/.env.hml ps
+```
+
+### Derrubar
+
+```bash
+cd ~/formaturasflow-hml
+docker compose -f deploy/docker-compose.hml.yml --env-file deploy/.env.hml down          # mantém o banco
+docker compose -f deploy/docker-compose.hml.yml --env-file deploy/.env.hml down -v       # zera o banco de hml
+```
+
+### Credenciais de PSP em homologação
+
+`Asaas__Sandbox` e `Cora__Sandbox` estão **fixados em `true`** no compose de hml — não vêm do `.env`. Mesmo colando uma chave de produção por engano, o ambiente continua batendo em `api-sandbox.asaas.com` e `matls-clients.api.stage.cora.com.br`. Sem credencial preenchida, as rotas de cobrança respondem `502 GATEWAY_INDISPONIVEL`, e o roteamento (422 de domínio × método) continua testável.
+
 ## Rollback
 
 ```bash
