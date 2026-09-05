@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Respawn;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -47,7 +48,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
 
-        _respawner = await Respawner.CreateAsync(ConnectionString, new RespawnerOptions
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
+        _respawner = await Respawner.CreateAsync(conn, new RespawnerOptions
         {
             DbAdapter = DbAdapter.Postgres,
             SchemasToInclude = ["public"],
@@ -57,8 +60,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public async Task ResetDatabaseAsync()
     {
-        if (_respawner is not null)
-            await _respawner.ResetAsync(ConnectionString);
+        if (_respawner is null) return;
+        await using var conn = new NpgsqlConnection(ConnectionString);
+        await conn.OpenAsync();
+        await _respawner.ResetAsync(conn);
     }
 
     public new async Task DisposeAsync()
