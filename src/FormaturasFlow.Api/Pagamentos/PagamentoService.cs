@@ -74,6 +74,7 @@ public class PagamentoService(
             _ => AsaasClient.BillingType.UNDEFINED
         };
 
+        var parcelar = tipo == TipoPagamento.Cartao && numParcelas is > 1;
         var cobranca = await asaas.CriarCobrancaAsync(new AsaasClient.CriarCobrancaRequest(
             Customer: aluno.AsaasCustomerId!,
             BillingType: billing,
@@ -81,10 +82,8 @@ public class PagamentoService(
             DueDate: p.Vencimento,
             Description: descricao,
             ExternalReference: p.Id.ToString(),
-            InstallmentCount: tipo == TipoPagamento.Cartao ? numParcelas : null,
-            InstallmentValue: tipo == TipoPagamento.Cartao && numParcelas is > 1
-                ? Math.Round(p.Valor / numParcelas.Value, 2)
-                : null), ct);
+            InstallmentCount: parcelar ? numParcelas : null,
+            InstallmentValue: parcelar ? Math.Round(p.Valor / numParcelas!.Value, 2) : null), ct);
 
         p.PspProvider = "asaas";
         p.PspChargeId = cobranca.Id;
