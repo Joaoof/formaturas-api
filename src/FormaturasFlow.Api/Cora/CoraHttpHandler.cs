@@ -1,14 +1,13 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Options;
 
-namespace FormaturasFlow.Api.Efi;
+namespace FormaturasFlow.Api.Cora;
 
-public class EfiHttpHandler : HttpClientHandler
+public class CoraHttpHandler : HttpClientHandler
 {
-    public EfiHttpHandler(IOptions<EfiOptions> opt)
+    public CoraHttpHandler(IOptions<CoraOptions> opt)
     {
         var o = opt.Value;
-
         if (!string.IsNullOrWhiteSpace(o.CertificateBase64))
         {
             var raw = Convert.FromBase64String(o.CertificateBase64);

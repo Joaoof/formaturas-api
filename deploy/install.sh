@@ -115,13 +115,14 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE}
       Jwt__Key: ${JWT_KEY}
       Jwt__AccessTokenMinutes: ${JWT_ACCESS_TOKEN_MINUTES:-60}
-      Efi__Sandbox: ${EFI_SANDBOX:-true}
-      Efi__ClientId: ${EFI_CLIENT_ID}
-      Efi__ClientSecret: ${EFI_CLIENT_SECRET}
-      Efi__CertificateBase64: ${EFI_CERTIFICATE_BASE64}
-      Efi__CertificatePassword: ${EFI_CERTIFICATE_PASSWORD}
-      Efi__PixKey: ${EFI_PIX_KEY}
-      Efi__WebhookSecret: ${EFI_WEBHOOK_SECRET}
+      Asaas__Sandbox: ${ASAAS_SANDBOX:-true}
+      Asaas__ApiKey: ${ASAAS_API_KEY}
+      Asaas__WebhookToken: ${ASAAS_WEBHOOK_TOKEN}
+      Cora__Sandbox: ${CORA_SANDBOX:-true}
+      Cora__ClientId: ${CORA_CLIENT_ID}
+      Cora__CertificateBase64: ${CORA_CERTIFICATE_BASE64}
+      Cora__CertificatePassword: ${CORA_CERTIFICATE_PASSWORD}
+      Cora__WebhookToken: ${CORA_WEBHOOK_TOKEN}
       TZ: America/Sao_Paulo
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
@@ -164,13 +165,15 @@ JWT_AUDIENCE=formaturasflow-front
 JWT_KEY=troque_por_chave_de_32_bytes_ou_mais
 JWT_ACCESS_TOKEN_MINUTES=60
 
-EFI_SANDBOX=true
-EFI_CLIENT_ID=
-EFI_CLIENT_SECRET=
-EFI_CERTIFICATE_BASE64=
-EFI_CERTIFICATE_PASSWORD=
-EFI_PIX_KEY=
-EFI_WEBHOOK_SECRET=trocar-quando-configurar-efi
+ASAAS_SANDBOX=true
+ASAAS_API_KEY=
+ASAAS_WEBHOOK_TOKEN=
+
+CORA_SANDBOX=true
+CORA_CLIENT_ID=
+CORA_CERTIFICATE_BASE64=
+CORA_CERTIFICATE_PASSWORD=
+CORA_WEBHOOK_TOKEN=
 ENV
 
 if [[ ! -f "$COMPOSE_DIR/.env" ]]; then

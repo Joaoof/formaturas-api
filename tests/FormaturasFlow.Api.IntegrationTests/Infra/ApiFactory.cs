@@ -36,9 +36,12 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         Environment.SetEnvironmentVariable("Jwt__Audience", "test-audience");
         Environment.SetEnvironmentVariable("Jwt__Key", "chave-hmac-forte-com-mais-de-32-bytes-obrigatorio-aqui!!");
         Environment.SetEnvironmentVariable("Jwt__AccessTokenMinutes", "60");
-        Environment.SetEnvironmentVariable("Efi__Sandbox", "true");
-        Environment.SetEnvironmentVariable("Efi__WebhookSecret", "test-webhook-secret");
-        Environment.SetEnvironmentVariable("Efi__PixKey", "test-pix-key");
+        Environment.SetEnvironmentVariable("Asaas__Sandbox", "true");
+        Environment.SetEnvironmentVariable("Asaas__ApiKey", "test-asaas-api-key");
+        Environment.SetEnvironmentVariable("Asaas__WebhookToken", "test-asaas-webhook-token");
+        Environment.SetEnvironmentVariable("Cora__Sandbox", "true");
+        Environment.SetEnvironmentVariable("Cora__ClientId", "test-cora-client");
+        Environment.SetEnvironmentVariable("Cora__WebhookToken", "test-cora-webhook-token");
 
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

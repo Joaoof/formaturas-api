@@ -1,8 +1,10 @@
 using System.Text;
+using FormaturasFlow.Api.Asaas;
 using FormaturasFlow.Api.Auth;
+using FormaturasFlow.Api.Cora;
 using FormaturasFlow.Api.Data;
-using FormaturasFlow.Api.Efi;
 using FormaturasFlow.Api.Endpoints;
+using FormaturasFlow.Api.Pagamentos;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +14,8 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
-builder.Services.Configure<EfiOptions>(builder.Configuration.GetSection(EfiOptions.SectionName));
+builder.Services.Configure<AsaasOptions>(builder.Configuration.GetSection(AsaasOptions.SectionName));
+builder.Services.Configure<CoraOptions>(builder.Configuration.GetSection(CoraOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("ConnectionStrings:Default ausente.");
@@ -53,9 +56,13 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<JwtTokenService>();
 
-builder.Services.AddTransient<EfiHttpHandler>();
-builder.Services.AddHttpClient<EfiClient>()
-    .ConfigurePrimaryHttpMessageHandler<EfiHttpHandler>();
+builder.Services.AddHttpClient<AsaasClient>();
+
+builder.Services.AddTransient<CoraHttpHandler>();
+builder.Services.AddHttpClient<CoraClient>()
+    .ConfigurePrimaryHttpMessageHandler<CoraHttpHandler>();
+
+builder.Services.AddScoped<PagamentoService>();
 
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
@@ -101,7 +108,7 @@ v1.MapTurmaEndpoints();
 v1.MapAlunoEndpoints();
 v1.MapContratoEndpoints();
 v1.MapParcelaEndpoints();
-v1.MapEfiEndpoints();
+v1.MapPagamentoEndpoints();
 
 app.Run();
 

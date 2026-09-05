@@ -7,9 +7,9 @@ namespace FormaturasFlow.Api.Endpoints;
 
 public static class TurmaEndpoints
 {
-    public record TurmaDto(Guid Id, string Nome, string? Instituicao, string? Curso, int? AnoFormatura, int TotalAlunos);
-    public record TurmaCreate(string Nome, string? Instituicao, string? Curso, int? AnoFormatura, string? Observacoes);
-    public record TurmaUpdate(string Nome, string? Instituicao, string? Curso, int? AnoFormatura, string? Observacoes);
+    public record TurmaDto(Guid Id, string Nome, string? Instituicao, string? Curso, int? AnoFormatura, TipoEvento TipoEvento, DateOnly? DataEvento, int TotalAlunos);
+    public record TurmaCreate(string Nome, string? Instituicao, string? Curso, int? AnoFormatura, TipoEvento? TipoEvento, DateOnly? DataEvento, string? Observacoes);
+    public record TurmaUpdate(string Nome, string? Instituicao, string? Curso, int? AnoFormatura, TipoEvento? TipoEvento, DateOnly? DataEvento, string? Observacoes);
 
     public static IEndpointRouteBuilder MapTurmaEndpoints(this IEndpointRouteBuilder app)
     {
@@ -57,7 +57,7 @@ public static class TurmaEndpoints
     {
         var list = await db.Turmas
             .AsNoTracking()
-            .Select(t => new TurmaDto(t.Id, t.Nome, t.Instituicao, t.Curso, t.AnoFormatura, t.Alunos.Count))
+            .Select(t => new TurmaDto(t.Id, t.Nome, t.Instituicao, t.Curso, t.AnoFormatura, t.TipoEvento, t.DataEvento, t.Alunos.Count))
             .ToListAsync();
         return Results.Ok(list);
     }
@@ -76,6 +76,8 @@ public static class TurmaEndpoints
             Instituicao = req.Instituicao,
             Curso = req.Curso,
             AnoFormatura = req.AnoFormatura,
+            TipoEvento = req.TipoEvento ?? TipoEvento.Formatura,
+            DataEvento = req.DataEvento,
             Observacoes = req.Observacoes
         };
         db.Turmas.Add(t);
@@ -92,6 +94,8 @@ public static class TurmaEndpoints
         t.Instituicao = req.Instituicao;
         t.Curso = req.Curso;
         t.AnoFormatura = req.AnoFormatura;
+        if (req.TipoEvento.HasValue) t.TipoEvento = req.TipoEvento.Value;
+        t.DataEvento = req.DataEvento;
         t.Observacoes = req.Observacoes;
         t.AtualizadaEm = DateTimeOffset.UtcNow;
 

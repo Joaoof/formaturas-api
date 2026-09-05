@@ -22,6 +22,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             e.ToTable("turmas");
             e.HasIndex(x => x.Nome);
+            e.HasIndex(x => x.TipoEvento);
+            e.Property(x => x.TipoEvento).HasConversion<string>();
         });
 
         b.Entity<Aluno>(e =>
@@ -30,6 +32,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasIndex(x => x.TurmaId);
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.LoginUsuario).IsUnique();
+            e.HasIndex(x => x.AsaasCustomerId);
             e.HasOne(x => x.Turma).WithMany(t => t.Alunos)
                 .HasForeignKey(x => x.TurmaId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.User).WithMany()

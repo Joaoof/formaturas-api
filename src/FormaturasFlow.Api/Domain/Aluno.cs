@@ -23,6 +23,8 @@ public class Aluno
     public string? Cep { get; set; }
     public string? LoginUsuario { get; set; }
 
+    public string? AsaasCustomerId { get; set; }
+
     public DateTimeOffset CriadoEm { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset AtualizadoEm { get; set; } = DateTimeOffset.UtcNow;
 
