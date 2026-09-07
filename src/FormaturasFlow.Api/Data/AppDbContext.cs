@@ -14,6 +14,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Despesa> Despesas => Set<Despesa>();
     public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
     public DbSet<Cobranca> Cobrancas => Set<Cobranca>();
+    public DbSet<Auth.RefreshToken> RefreshTokens => Set<Auth.RefreshToken>();
+    public DbSet<Auth.ServiceToken> ServiceTokens => Set<Auth.ServiceToken>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -86,6 +88,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.ValorPago).HasPrecision(12, 2);
             e.Property(x => x.Status).HasConversion<string>();
             e.Property(x => x.TipoEvento).HasConversion<string>();
+        });
+
+        b.Entity<Auth.RefreshToken>(e =>
+        {
+            e.ToTable("refresh_tokens");
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.ExpiresAt);
+        });
+
+        b.Entity<Auth.ServiceToken>(e =>
+        {
+            e.ToTable("service_tokens");
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.ExpiresAt);
+            e.HasIndex(x => x.CriadoPorUserId);
         });
     }
 }

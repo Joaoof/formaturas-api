@@ -8,4 +8,7 @@ public class JwtOptions
     public string Audience { get; set; } = string.Empty;
     public string Key { get; set; } = string.Empty;
     public int AccessTokenMinutes { get; set; } = 60;
+    public int RefreshTokenDays { get; set; } = 30;
+    public int ServiceTokenDaysDefault { get; set; } = 90;
+    public int ServiceTokenDaysMax { get; set; } = 365;
 }
