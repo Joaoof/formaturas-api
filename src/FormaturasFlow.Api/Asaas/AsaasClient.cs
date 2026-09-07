@@ -149,6 +149,27 @@ public class AsaasClient(HttpClient http, IOptions<AsaasOptions> opt, ILogger<As
             ExpirationDate: exp);
     }
 
+    public record BoletoIdentificacao(string IdentificationField, string? Nossonumero, string? BarCode);
+
+    public async Task<BoletoIdentificacao?> BuscarBoletoIdentificationAsync(string paymentId, CancellationToken ct = default)
+    {
+        using var req = NewRequest(HttpMethod.Get, $"/payments/{paymentId}/identificationField");
+        using var resp = await http.SendAsync(req, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            log.LogWarning("Asaas /identificationField ainda nao pronto ({Status}) para {Id}", resp.StatusCode, paymentId);
+            return null;
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        return new BoletoIdentificacao(
+            IdentificationField: root.TryGetProperty("identificationField", out var idf) ? idf.GetString() ?? string.Empty : string.Empty,
+            Nossonumero: root.TryGetProperty("nossoNumero", out var nn) ? nn.GetString() : null,
+            BarCode: root.TryGetProperty("barCode", out var bc) ? bc.GetString() : null);
+    }
+
     private static string OnlyDigits(string s) => new(s.Where(char.IsDigit).ToArray());
 }
 

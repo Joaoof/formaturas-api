@@ -18,13 +18,20 @@ public static class PagamentoEndpoints
         app.MapPost("/parcelas/{id:guid}/cobranca", CriarCobrancaAsync)
             .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
             .WithTags("Pagamentos")
-            .WithSummary("Emite cobranca (PIX, boleto ou cartao) roteando para o PSP correto")
+            .WithSummary("Emite cobranca (PIX, boleto, cartao ou checkout dinamico) roteando para o PSP correto")
             .WithDescription("""
                 O PSP e escolhido automaticamente pelo tipo de evento da turma:
-                - Turma tipo Formatura/Outro: Cora para PIX e boleto, Asaas para cartao
+                - Turma tipo Formatura/Outro: Cora para PIX e boleto, Asaas para cartao/checkout
                 - Turma tipo Casamento: Asaas para tudo (permite agendar datas futuras)
 
-                Body: `{ "tipo": "pix" | "boleto" | "cartao", "numParcelasCartao": 3 (opcional) }`
+                Body: `{ "tipo": "pix" | "boleto" | "cartao" | "checkout", "numParcelasCartao": 3 (opcional) }`
+
+                Tipos:
+                - `pix`: gera codigo copia-e-cola + QR base64.
+                - `boleto`: gera PDF do boleto + linha digitavel (buscada em background se ainda nao pronta).
+                - `cartao`: gera link Asaas para o cliente inserir dados do cartao. Se `numParcelasCartao > 1`, parcela no cartao.
+                - `checkout`: gera link Asaas onde o cliente escolhe a forma (cartao credito, debito se habilitado, PIX, boleto). Unico jeito de oferecer debito.
+
                 Idempotencia: se a parcela ja tem `pspChargeId`, retorna a mesma cobranca.
                 """)
             .Produces<Parcela>(StatusCodes.Status200OK)
@@ -60,7 +67,7 @@ public static class PagamentoEndpoints
         CancellationToken ct)
     {
         if (!Enum.TryParse<TipoPagamento>(req.Tipo, ignoreCase: true, out var tipo))
-            return Results.BadRequest(new { erro = "tipo invalido. Use 'pix', 'boleto' ou 'cartao'." });
+            return Results.BadRequest(new { erro = "tipo invalido. Use 'pix', 'boleto', 'cartao' ou 'checkout'." });
 
         var parcela = await db.Parcelas
             .Include(p => p.Contrato)!.ThenInclude(c => c!.Aluno)!.ThenInclude(a => a!.Turma)

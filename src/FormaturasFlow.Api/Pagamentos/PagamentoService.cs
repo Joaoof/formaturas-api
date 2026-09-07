@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FormaturasFlow.Api.Pagamentos;
 
-public enum TipoPagamento { Pix, Boleto, Cartao }
+public enum TipoPagamento { Pix, Boleto, Cartao, Checkout }
 
 public class PagamentoService(
     AppDbContext db,
@@ -47,6 +47,7 @@ public class PagamentoService(
     private static Provider EscolherProvider(TipoPagamento tipo, bool eCasamento) => (tipo, eCasamento) switch
     {
         (TipoPagamento.Cartao, _) => Provider.Asaas,
+        (TipoPagamento.Checkout, _) => Provider.Asaas,
         (_, true) => Provider.Asaas,
         _ => Provider.Cora
     };
@@ -71,6 +72,7 @@ public class PagamentoService(
             TipoPagamento.Cartao => AsaasClient.BillingType.CREDIT_CARD,
             TipoPagamento.Boleto => AsaasClient.BillingType.BOLETO,
             TipoPagamento.Pix => AsaasClient.BillingType.PIX,
+            TipoPagamento.Checkout => AsaasClient.BillingType.UNDEFINED,
             _ => AsaasClient.BillingType.UNDEFINED
         };
 
@@ -94,6 +96,8 @@ public class PagamentoService(
         {
             p.BoletoUrl = cobranca.BankSlipUrl ?? cobranca.InvoiceUrl;
             p.BoletoLinhaDigitavel = cobranca.IdentificationField;
+            if (string.IsNullOrEmpty(p.BoletoLinhaDigitavel))
+                await CompletarBoletoAsaasAsync(p, cobranca.Id, ct);
         }
         else if (tipo == TipoPagamento.Pix)
         {
@@ -108,6 +112,20 @@ public class PagamentoService(
                 log.LogWarning(ex, "Cobranca Asaas PIX criada mas QR falhou. Id={Id}", cobranca.Id);
             }
         }
+    }
+
+    private async Task CompletarBoletoAsaasAsync(Parcela p, string paymentId, CancellationToken ct)
+    {
+        for (var tentativa = 1; tentativa <= 3; tentativa++)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(tentativa * 2), ct);
+            var info = await asaas.BuscarBoletoIdentificationAsync(paymentId, ct);
+            if (info is null || string.IsNullOrEmpty(info.IdentificationField)) continue;
+            p.BoletoLinhaDigitavel = info.IdentificationField;
+            p.BoletoCodigoBarras = info.BarCode;
+            return;
+        }
+        log.LogWarning("Boleto Asaas {Id} sem linha digitavel apos 3 tentativas; webhook PAYMENT_UPDATED devera preencher depois", paymentId);
     }
 
     private async Task EmitirViaCoraAsync(
