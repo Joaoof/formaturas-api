@@ -7,6 +7,8 @@ networks:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
 
 services:
   postgres:
@@ -38,8 +40,8 @@ services:
       postgres:
         condition: service_healthy
     networks: [edge, internal]
-    ports:
-      - "80:8080"
+    expose:
+      - "8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
@@ -66,6 +68,24 @@ services:
       start_period: 40s
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: formaturas-caddy
+    restart: unless-stopped
+    networks: [edge]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
 
   watchtower:
     image: nickfedor/watchtower:latest

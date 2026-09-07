@@ -67,8 +67,21 @@ builder.Services.AddScoped<PagamentoService>();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 
+var corsExplicit = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
+    ?? ["http://localhost:5173", "http://localhost:3000"];
+var corsPatterns = builder.Configuration.GetSection("Cors:Patterns").Get<string[]>()
+    ?? [".vercel.app", ".lovable.app"];
+
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
-    .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173"])
+    .SetIsOriginAllowed(origin =>
+    {
+        if (corsExplicit.Contains(origin, StringComparer.OrdinalIgnoreCase)) return true;
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var u)) return false;
+        var host = u.Host;
+        return corsPatterns.Any(pat =>
+            pat.StartsWith('.') ? host.EndsWith(pat, StringComparison.OrdinalIgnoreCase) || host.Equals(pat[1..], StringComparison.OrdinalIgnoreCase)
+                                : host.Equals(pat, StringComparison.OrdinalIgnoreCase));
+    })
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 builder.Services.AddProblemDetails();
@@ -79,7 +92,18 @@ builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
 });
 
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                       | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+                       | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost;
+    o.KnownIPNetworks.Clear();
+    o.KnownProxies.Clear();
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 using (var scope = app.Services.CreateScope())
 {
@@ -89,7 +113,6 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
-app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();

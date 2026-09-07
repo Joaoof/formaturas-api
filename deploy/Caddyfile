@@ -1,0 +1,23 @@
+{
+    email doutordigitalconsultoria@gmail.com
+}
+
+api-191-101-78-252.nip.io {
+    encode zstd gzip
+
+    reverse_proxy api:8080 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-For {remote_host}
+    }
+
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}
+
+http://191.101.78.252 {
+    redir https://api-191-101-78-252.nip.io{uri} permanent
+}
