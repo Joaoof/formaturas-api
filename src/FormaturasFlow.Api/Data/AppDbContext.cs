@@ -26,7 +26,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.ToTable("turmas");
             e.HasIndex(x => x.Nome);
             e.HasIndex(x => x.TipoEvento);
+            e.HasIndex(x => x.Status);
             e.Property(x => x.TipoEvento).HasConversion<string>();
+            e.Property(x => x.Status).HasConversion<string>();
         });
 
         b.Entity<Aluno>(e =>

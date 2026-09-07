@@ -7,9 +7,48 @@ namespace FormaturasFlow.Api.Endpoints;
 
 public static class TurmaEndpoints
 {
-    public record TurmaDto(Guid Id, string Nome, string? Instituicao, string? Curso, int? AnoFormatura, TipoEvento TipoEvento, DateOnly? DataEvento, int TotalAlunos);
-    public record TurmaCreate(string Nome, string? Instituicao, string? Curso, int? AnoFormatura, TipoEvento? TipoEvento, DateOnly? DataEvento, string? Observacoes);
-    public record TurmaUpdate(string Nome, string? Instituicao, string? Curso, int? AnoFormatura, TipoEvento? TipoEvento, DateOnly? DataEvento, string? Observacoes);
+    public record TurmaDto(
+        Guid Id,
+        string Nome,
+        string? Faculdade,
+        string? Instituicao,
+        string? Curso,
+        string? Cidade,
+        string? Semestre,
+        int? AnoFormatura,
+        DateOnly? PrevisaoFormatura,
+        TipoEvento TipoEvento,
+        DateOnly? DataEvento,
+        StatusTurma Status,
+        int TotalAlunos);
+
+    public record TurmaCreate(
+        string Nome,
+        string? Faculdade,
+        string? Instituicao,
+        string? Curso,
+        string? Cidade,
+        string? Semestre,
+        int? AnoFormatura,
+        DateOnly? PrevisaoFormatura,
+        TipoEvento? TipoEvento,
+        DateOnly? DataEvento,
+        StatusTurma? Status,
+        string? Observacoes);
+
+    public record TurmaUpdate(
+        string Nome,
+        string? Faculdade,
+        string? Instituicao,
+        string? Curso,
+        string? Cidade,
+        string? Semestre,
+        int? AnoFormatura,
+        DateOnly? PrevisaoFormatura,
+        TipoEvento? TipoEvento,
+        DateOnly? DataEvento,
+        StatusTurma? Status,
+        string? Observacoes);
 
     public static IEndpointRouteBuilder MapTurmaEndpoints(this IEndpointRouteBuilder app)
     {
@@ -57,7 +96,11 @@ public static class TurmaEndpoints
     {
         var list = await db.Turmas
             .AsNoTracking()
-            .Select(t => new TurmaDto(t.Id, t.Nome, t.Instituicao, t.Curso, t.AnoFormatura, t.TipoEvento, t.DataEvento, t.Alunos.Count))
+            .OrderByDescending(t => t.CriadaEm)
+            .Select(t => new TurmaDto(
+                t.Id, t.Nome, t.Faculdade, t.Instituicao, t.Curso, t.Cidade, t.Semestre,
+                t.AnoFormatura, t.PrevisaoFormatura, t.TipoEvento, t.DataEvento, t.Status,
+                t.Alunos.Count))
             .ToListAsync();
         return Results.Ok(list);
     }
@@ -73,11 +116,16 @@ public static class TurmaEndpoints
         var t = new Turma
         {
             Nome = req.Nome,
-            Instituicao = req.Instituicao,
+            Faculdade = req.Faculdade ?? req.Instituicao,
+            Instituicao = req.Instituicao ?? req.Faculdade,
             Curso = req.Curso,
+            Cidade = req.Cidade,
+            Semestre = req.Semestre,
             AnoFormatura = req.AnoFormatura,
+            PrevisaoFormatura = req.PrevisaoFormatura,
             TipoEvento = req.TipoEvento ?? TipoEvento.Formatura,
             DataEvento = req.DataEvento,
+            Status = req.Status ?? StatusTurma.Ativa,
             Observacoes = req.Observacoes
         };
         db.Turmas.Add(t);
@@ -91,11 +139,16 @@ public static class TurmaEndpoints
         if (t is null) return Results.NotFound();
 
         t.Nome = req.Nome;
-        t.Instituicao = req.Instituicao;
+        t.Faculdade = req.Faculdade ?? req.Instituicao ?? t.Faculdade;
+        t.Instituicao = req.Instituicao ?? req.Faculdade ?? t.Instituicao;
         t.Curso = req.Curso;
+        t.Cidade = req.Cidade;
+        t.Semestre = req.Semestre;
         t.AnoFormatura = req.AnoFormatura;
+        t.PrevisaoFormatura = req.PrevisaoFormatura;
         if (req.TipoEvento.HasValue) t.TipoEvento = req.TipoEvento.Value;
         t.DataEvento = req.DataEvento;
+        if (req.Status.HasValue) t.Status = req.Status.Value;
         t.Observacoes = req.Observacoes;
         t.AtualizadaEm = DateTimeOffset.UtcNow;
 
