@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Parcela> Parcelas => Set<Parcela>();
     public DbSet<Despesa> Despesas => Set<Despesa>();
     public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
+    public DbSet<Cobranca> Cobrancas => Set<Cobranca>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -73,6 +74,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             e.ToTable("webhook_events");
             e.HasIndex(x => new { x.Provider, x.EventId }).IsUnique();
+        });
+
+        b.Entity<Cobranca>(e =>
+        {
+            e.ToTable("cobrancas");
+            e.HasIndex(x => x.ExternalReference);
+            e.HasIndex(x => x.PspChargeId);
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Valor).HasPrecision(12, 2);
+            e.Property(x => x.ValorPago).HasPrecision(12, 2);
+            e.Property(x => x.Status).HasConversion<string>();
+            e.Property(x => x.TipoEvento).HasConversion<string>();
         });
     }
 }

@@ -172,19 +172,36 @@ public static class PagamentoEndpoints
     {
         var parcela = await db.Parcelas.FirstOrDefaultAsync(
             p => p.PspProvider == provider && p.PspChargeId == chargeId, ct);
-        if (parcela is null) return;
-
-        parcela.PspStatus = status;
-        parcela.AtualizadaEm = DateTimeOffset.UtcNow;
-
-        if (EhStatusPago(provider, status))
+        if (parcela is not null)
         {
-            parcela.Status = StatusParcela.Pago;
-            parcela.DataPagamento = DateOnly.FromDateTime(DateTime.UtcNow);
-            var valor = payload.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.Number
-                ? v.GetDecimal()
-                : parcela.Valor;
-            parcela.ValorPago = valor;
+            parcela.PspStatus = status;
+            parcela.AtualizadaEm = DateTimeOffset.UtcNow;
+            if (EhStatusPago(provider, status))
+            {
+                parcela.Status = StatusParcela.Pago;
+                parcela.DataPagamento = DateOnly.FromDateTime(DateTime.UtcNow);
+                var valorP = payload.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.Number
+                    ? v.GetDecimal()
+                    : parcela.Valor;
+                parcela.ValorPago = valorP;
+            }
+        }
+
+        var cobranca = await db.Cobrancas.FirstOrDefaultAsync(
+            c => c.PspProvider == provider && c.PspChargeId == chargeId, ct);
+        if (cobranca is not null)
+        {
+            cobranca.PspStatus = status;
+            cobranca.AtualizadaEm = DateTimeOffset.UtcNow;
+            if (EhStatusPago(provider, status))
+            {
+                cobranca.Status = StatusCobranca.Confirmado;
+                cobranca.DataPagamento = DateOnly.FromDateTime(DateTime.UtcNow);
+                var valorC = payload.TryGetProperty("value", out var v) && v.ValueKind == JsonValueKind.Number
+                    ? v.GetDecimal()
+                    : cobranca.Valor;
+                cobranca.ValorPago = valorC;
+            }
         }
     }
 

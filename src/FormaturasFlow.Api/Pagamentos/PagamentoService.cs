@@ -161,5 +161,126 @@ public class PagamentoService(
         }
     }
 
+    public async Task<Cobranca> EmitirCobrancaStandaloneAsync(Cobranca c, TipoPagamento tipo, int? numParcelasCartao, CancellationToken ct)
+    {
+        var eCasamento = c.TipoEvento == TipoEvento.Casamento;
+        var provider = EscolherProvider(tipo, eCasamento);
+
+        if (provider == Provider.Asaas)
+            await EmitirStandaloneViaAsaasAsync(c, tipo, numParcelasCartao, ct);
+        else
+            await EmitirStandaloneViaCoraAsync(c, tipo, ct);
+
+        c.TipoPagamento = tipo.ToString().ToLowerInvariant();
+        c.NumParcelasCartao = numParcelasCartao;
+        c.AtualizadaEm = DateTimeOffset.UtcNow;
+        db.Cobrancas.Add(c);
+        await db.SaveChangesAsync(ct);
+        return c;
+    }
+
+    private async Task EmitirStandaloneViaAsaasAsync(Cobranca c, TipoPagamento tipo, int? numParcelas, CancellationToken ct)
+    {
+        var customerId = c.PspCustomerId;
+        if (string.IsNullOrEmpty(customerId))
+        {
+            var cliente = await asaas.CriarClienteAsync(new AsaasClient.CriarClienteRequest(
+                Name: c.ClienteNome,
+                CpfCnpj: c.ClienteCpf ?? "00000000000",
+                Email: c.ClienteEmail,
+                Phone: c.ClienteTelefone,
+                MobilePhone: c.ClienteWhatsapp), ct);
+            customerId = cliente.Id;
+            c.PspCustomerId = customerId;
+        }
+
+        var billing = tipo switch
+        {
+            TipoPagamento.Cartao => AsaasClient.BillingType.CREDIT_CARD,
+            TipoPagamento.Boleto => AsaasClient.BillingType.BOLETO,
+            TipoPagamento.Pix => AsaasClient.BillingType.PIX,
+            TipoPagamento.Checkout => AsaasClient.BillingType.UNDEFINED,
+            _ => AsaasClient.BillingType.UNDEFINED
+        };
+
+        var parcelar = tipo == TipoPagamento.Cartao && numParcelas is > 1;
+        var cobranca = await asaas.CriarCobrancaAsync(new AsaasClient.CriarCobrancaRequest(
+            Customer: customerId!,
+            BillingType: billing,
+            Value: c.Valor,
+            DueDate: c.Vencimento,
+            Description: c.Descricao,
+            ExternalReference: c.ExternalReference,
+            InstallmentCount: parcelar ? numParcelas : null,
+            InstallmentValue: parcelar ? Math.Round(c.Valor / numParcelas!.Value, 2) : null), ct);
+
+        c.PspProvider = "asaas";
+        c.PspChargeId = cobranca.Id;
+        c.PspStatus = cobranca.Status;
+        c.LinkPagamento = cobranca.InvoiceUrl;
+
+        if (tipo == TipoPagamento.Boleto)
+        {
+            c.BoletoUrl = cobranca.BankSlipUrl ?? cobranca.InvoiceUrl;
+            c.BoletoLinhaDigitavel = cobranca.IdentificationField;
+            if (string.IsNullOrEmpty(c.BoletoLinhaDigitavel))
+            {
+                for (var tentativa = 1; tentativa <= 3; tentativa++)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(tentativa * 2), ct);
+                    var info = await asaas.BuscarBoletoIdentificationAsync(cobranca.Id, ct);
+                    if (info is null || string.IsNullOrEmpty(info.IdentificationField)) continue;
+                    c.BoletoLinhaDigitavel = info.IdentificationField;
+                    c.BoletoCodigoBarras = info.BarCode;
+                    break;
+                }
+            }
+        }
+        else if (tipo == TipoPagamento.Pix)
+        {
+            try
+            {
+                var qr = await asaas.BuscarPixQrCodeAsync(cobranca.Id, ct);
+                c.PixCopiaCola = qr.Payload;
+                c.PixQrCodeUrl = qr.EncodedImage;
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning(ex, "Cobranca standalone Asaas PIX criada mas QR falhou. Id={Id}", cobranca.Id);
+            }
+        }
+    }
+
+    private async Task EmitirStandaloneViaCoraAsync(Cobranca c, TipoPagamento tipo, CancellationToken ct)
+    {
+        var kind = tipo == TipoPagamento.Pix ? CoraClient.InvoiceKind.PIX : CoraClient.InvoiceKind.BOLETO;
+        var invoice = await cora.CriarInvoiceAsync(new CoraClient.CriarInvoiceRequest(
+            Kind: kind,
+            Value: c.Valor,
+            DueDate: c.Vencimento,
+            CustomerName: c.ClienteNome,
+            CustomerDocument: c.ClienteCpf ?? "00000000000",
+            CustomerEmail: c.ClienteEmail,
+            Description: c.Descricao), ct);
+
+        c.PspProvider = "cora";
+        c.PspChargeId = invoice.Id;
+        c.PspStatus = invoice.Status;
+
+        if (tipo == TipoPagamento.Pix)
+        {
+            c.PixCopiaCola = invoice.PixEmv;
+            c.PixQrCodeUrl = invoice.PixQrCodeBase64;
+            c.LinkPagamento = invoice.PixEmv;
+        }
+        else
+        {
+            c.BoletoUrl = invoice.BoletoUrl;
+            c.BoletoLinhaDigitavel = invoice.BoletoLinhaDigitavel;
+            c.BoletoCodigoBarras = invoice.BoletoCodigoBarras;
+            c.LinkPagamento = invoice.BoletoUrl;
+        }
+    }
+
     private enum Provider { Asaas, Cora }
 }
