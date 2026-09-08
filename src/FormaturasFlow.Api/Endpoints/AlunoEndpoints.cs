@@ -9,7 +9,8 @@ public static class AlunoEndpoints
 {
     public record AlunoDto(
         Guid Id, Guid TurmaId, string NomeCompleto, string? Cpf, string? Email,
-        string? Whatsapp, string? Telefone, string Status, DateTimeOffset CriadoEm);
+        string? Whatsapp, string? Telefone, string Status, string? MotivoInativacao,
+        DateTimeOffset CriadoEm, DateTimeOffset AtualizadoEm);
 
     public record AlunoCreate(
         Guid TurmaId, string NomeCompleto, string? Cpf, string? Rg,
@@ -101,7 +102,7 @@ public static class AlunoEndpoints
             q = q.Where(a => a.Status == s);
         var list = await q
             .OrderBy(a => a.NomeCompleto)
-            .Select(a => new AlunoDto(a.Id, a.TurmaId, a.NomeCompleto, a.Cpf, a.Email, a.Whatsapp, a.Telefone, a.Status.ToString(), a.CriadoEm))
+            .Select(a => new AlunoDto(a.Id, a.TurmaId, a.NomeCompleto, a.Cpf, a.Email, a.Whatsapp, a.Telefone, a.Status.ToString(), a.MotivoInativacao, a.CriadoEm, a.AtualizadoEm))
             .ToListAsync();
         return Results.Ok(list);
     }

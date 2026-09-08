@@ -140,6 +140,7 @@ v1.MapContratoEndpoints();
 v1.MapParcelaEndpoints();
 v1.MapPagamentoEndpoints();
 v1.MapCobrancaEndpoints();
+v1.MapDespesaEndpoints();
 
 app.Run();
 

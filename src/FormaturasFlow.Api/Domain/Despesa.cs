@@ -15,6 +15,9 @@ public class Despesa
     public DateOnly Vencimento { get; set; }
     public DateOnly? DataPagamento { get; set; }
     public StatusDespesa Status { get; set; } = StatusDespesa.Pendente;
+    public string? FormaPagamento { get; set; }
+    public string? Observacao { get; set; }
+    public Guid? TurmaId { get; set; }
 
     public DateTimeOffset CriadaEm { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset AtualizadaEm { get; set; } = DateTimeOffset.UtcNow;
