@@ -12,17 +12,39 @@ public static class ContratoEndpoints
         string? Pacote,
         decimal ValorTotal,
         decimal ValorEntrada,
+        decimal? Desconto,
         int NumParcelas,
+        int? DiaVencimento,
+        bool? AutorizaImagem,
         string? FormaPagamento,
         DateOnly DataContrato,
         DateOnly PrimeiroVencimento);
+
+    public record ContratoUpdate(
+        string? Pacote,
+        decimal ValorTotal,
+        decimal ValorEntrada,
+        decimal? Desconto,
+        int NumParcelas,
+        int? DiaVencimento,
+        bool? AutorizaImagem,
+        string? FormaPagamento,
+        string? TextoContrato,
+        bool? RecalcularParcelas,
+        DateOnly? PrimeiroVencimento);
 
     public static IEndpointRouteBuilder MapContratoEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/contratos").WithTags("Contratos").RequireAuthorization();
 
-        group.MapGet("/", async (AppDbContext db) => await db.Contratos.AsNoTracking().ToListAsync())
-            .WithSummary("Lista todos os contratos")
+        group.MapGet("/", async (AppDbContext db, [FromQuery] Guid? alunoId, [FromQuery] Guid? turmaId) =>
+        {
+            var q = db.Contratos.Include(c => c.Parcelas).AsNoTracking().AsQueryable();
+            if (alunoId.HasValue) q = q.Where(c => c.AlunoId == alunoId.Value);
+            if (turmaId.HasValue) q = q.Where(c => c.Aluno!.TurmaId == turmaId.Value);
+            return await q.ToListAsync();
+        })
+            .WithSummary("Lista contratos (opcionalmente filtrados por alunoId ou turmaId)")
             .Produces<Contrato[]>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized);
 
@@ -39,16 +61,22 @@ public static class ContratoEndpoints
         group.MapPost("/", CreateWithParcelasAsync)
             .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
             .WithSummary("Cria contrato e gera as parcelas do saldo em uma transação atômica")
-            .WithDescription("""
-                O saldo (`valorTotal - valorEntrada`) é dividido igualmente em `numParcelas`.
-                Como o arredondamento pode gerar centavos sobrando, o resto sempre cai na última parcela.
-                Vencimentos são mensais a partir de `primeiroVencimento`.
-                Requer papel `super_admin` ou `funcionario`.
-                """)
             .Produces<Contrato>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status403Forbidden);
+
+        group.MapPut("/{id:guid}", UpdateAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
+            .WithSummary("Atualiza dados de um contrato, opcionalmente recalculando parcelas")
+            .Produces<Contrato>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapDelete("/{id:guid}", DeleteAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
+            .WithSummary("Remove um contrato e suas parcelas")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
 
         return app;
     }
@@ -62,7 +90,10 @@ public static class ContratoEndpoints
         var alunoExiste = await db.Alunos.AnyAsync(a => a.Id == req.AlunoId);
         if (!alunoExiste) return Results.NotFound(new { erro = "Aluno não encontrado." });
 
-        var saldo = req.ValorTotal - req.ValorEntrada;
+        var desconto = req.Desconto ?? 0m;
+        var saldo = req.ValorTotal - req.ValorEntrada - desconto;
+        if (saldo <= 0) return Results.BadRequest(new { erro = "Saldo a parcelar precisa ser maior que zero." });
+
         var valorParcela = Math.Round(saldo / req.NumParcelas, 2);
         var resto = saldo - (valorParcela * req.NumParcelas);
 
@@ -74,11 +105,27 @@ public static class ContratoEndpoints
             Pacote = req.Pacote,
             ValorTotal = req.ValorTotal,
             ValorEntrada = req.ValorEntrada,
+            Desconto = desconto,
             NumParcelas = req.NumParcelas,
+            DiaVencimento = req.DiaVencimento,
+            AutorizaImagem = req.AutorizaImagem ?? true,
             FormaPagamento = req.FormaPagamento,
             DataContrato = req.DataContrato
         };
         db.Contratos.Add(contrato);
+
+        if (req.ValorEntrada > 0)
+        {
+            db.Parcelas.Add(new Parcela
+            {
+                ContratoId = contrato.Id,
+                Numero = 0,
+                Valor = req.ValorEntrada,
+                ValorPago = 0,
+                Vencimento = DateOnly.FromDateTime(DateTime.UtcNow),
+                Status = StatusParcela.Pendente
+            });
+        }
 
         for (var i = 1; i <= req.NumParcelas; i++)
         {
@@ -98,5 +145,68 @@ public static class ContratoEndpoints
         await tx.CommitAsync();
 
         return Results.Created($"/contratos/{contrato.Id}", contrato);
+    }
+
+    private static async Task<IResult> UpdateAsync(Guid id, [FromBody] ContratoUpdate req, AppDbContext db)
+    {
+        var c = await db.Contratos.Include(x => x.Parcelas).FirstOrDefaultAsync(x => x.Id == id);
+        if (c is null) return Results.NotFound();
+
+        c.Pacote = req.Pacote;
+        c.ValorTotal = req.ValorTotal;
+        c.ValorEntrada = req.ValorEntrada;
+        c.Desconto = req.Desconto ?? 0m;
+        c.NumParcelas = req.NumParcelas;
+        c.DiaVencimento = req.DiaVencimento;
+        if (req.AutorizaImagem.HasValue) c.AutorizaImagem = req.AutorizaImagem.Value;
+        c.FormaPagamento = req.FormaPagamento;
+        if (req.TextoContrato is not null) c.TextoContrato = req.TextoContrato;
+        c.AtualizadoEm = DateTimeOffset.UtcNow;
+
+        if (req.RecalcularParcelas == true && req.PrimeiroVencimento.HasValue)
+        {
+            var saldo = c.ValorTotal - c.ValorEntrada - c.Desconto;
+            if (saldo <= 0) return Results.BadRequest(new { erro = "Saldo a parcelar precisa ser maior que zero." });
+
+            db.Parcelas.RemoveRange(c.Parcelas);
+
+            var valorParcela = Math.Round(saldo / c.NumParcelas, 2);
+            var resto = saldo - (valorParcela * c.NumParcelas);
+
+            if (c.ValorEntrada > 0)
+            {
+                db.Parcelas.Add(new Parcela
+                {
+                    ContratoId = c.Id,
+                    Numero = 0,
+                    Valor = c.ValorEntrada,
+                    Vencimento = DateOnly.FromDateTime(DateTime.UtcNow),
+                    Status = StatusParcela.Pendente
+                });
+            }
+
+            for (var i = 1; i <= c.NumParcelas; i++)
+            {
+                var venc = req.PrimeiroVencimento.Value.AddMonths(i - 1);
+                var valor = valorParcela + (i == c.NumParcelas ? resto : 0);
+                db.Parcelas.Add(new Parcela
+                {
+                    ContratoId = c.Id,
+                    Numero = i,
+                    Valor = valor,
+                    Vencimento = venc,
+                    Status = StatusParcela.Pendente
+                });
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return Results.Ok(c);
+    }
+
+    private static async Task<IResult> DeleteAsync(Guid id, AppDbContext db)
+    {
+        var deleted = await db.Contratos.Where(x => x.Id == id).ExecuteDeleteAsync();
+        return deleted == 0 ? Results.NotFound() : Results.NoContent();
     }
 }

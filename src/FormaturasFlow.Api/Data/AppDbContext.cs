@@ -38,6 +38,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.LoginUsuario).IsUnique();
             e.HasIndex(x => x.AsaasCustomerId);
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Status).HasConversion<string>();
             e.HasOne(x => x.Turma).WithMany(t => t.Alunos)
                 .HasForeignKey(x => x.TurmaId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.User).WithMany()
@@ -50,6 +52,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.HasIndex(x => x.AlunoId);
             e.Property(x => x.ValorTotal).HasPrecision(12, 2);
             e.Property(x => x.ValorEntrada).HasPrecision(12, 2);
+            e.Property(x => x.Desconto).HasPrecision(12, 2);
             e.HasOne(x => x.Aluno).WithMany(a => a.Contratos)
                 .HasForeignKey(x => x.AlunoId).OnDelete(DeleteBehavior.Cascade);
         });

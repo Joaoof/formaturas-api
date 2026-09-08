@@ -2,6 +2,8 @@ using FormaturasFlow.Api.Data;
 
 namespace FormaturasFlow.Api.Domain;
 
+public enum StatusAluno { Ativo = 0, Inativo = 1 }
+
 public class Aluno
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -22,6 +24,17 @@ public class Aluno
     public string? Cidade { get; set; }
     public string? Cep { get; set; }
     public string? LoginUsuario { get; set; }
+    public DateOnly? DataNascimento { get; set; }
+
+    public StatusAluno Status { get; set; } = StatusAluno.Ativo;
+    public string? MotivoInativacao { get; set; }
+
+    public string? LinkFotosSelecionadas { get; set; }
+    public int? PrazoFotosSelecionadas { get; set; }
+    public DateOnly? VencimentoFotosSelecionadas { get; set; }
+    public bool FotosLiberadas { get; set; }
+    public string? LinkAprovacaoAlbum { get; set; }
+    public bool AlbumLiberado { get; set; }
 
     public string? AsaasCustomerId { get; set; }
 

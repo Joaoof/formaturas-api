@@ -10,7 +10,10 @@ public class Contrato
     public string? Pacote { get; set; }
     public decimal ValorTotal { get; set; }
     public decimal ValorEntrada { get; set; }
+    public decimal Desconto { get; set; }
     public int NumParcelas { get; set; } = 1;
+    public int? DiaVencimento { get; set; }
+    public bool AutorizaImagem { get; set; } = true;
     public string? FormaPagamento { get; set; }
     public DateOnly DataContrato { get; set; } = DateOnly.FromDateTime(DateTime.UtcNow);
     public string? TextoContrato { get; set; }

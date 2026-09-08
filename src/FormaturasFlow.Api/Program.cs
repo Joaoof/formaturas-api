@@ -110,6 +110,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
     await SeedRolesAsync(scope.ServiceProvider);
+    await BootstrapAdminAsync(scope.ServiceProvider, app.Configuration);
 }
 
 app.UseExceptionHandler();
@@ -148,6 +149,19 @@ static async Task SeedRolesAsync(IServiceProvider sp)
     foreach (var r in new[] { Roles.SuperAdmin, Roles.Funcionario, Roles.Aluno })
         if (!await roleMgr.RoleExistsAsync(r))
             await roleMgr.CreateAsync(new ApplicationRole(r));
+}
+
+static async Task BootstrapAdminAsync(IServiceProvider sp, IConfiguration cfg)
+{
+    var email = cfg["Admin:BootstrapEmail"] ?? Environment.GetEnvironmentVariable("ADMIN_BOOTSTRAP_EMAIL");
+    if (string.IsNullOrWhiteSpace(email)) return;
+
+    var userMgr = sp.GetRequiredService<UserManager<ApplicationUser>>();
+    var user = await userMgr.FindByEmailAsync(email);
+    if (user is null) return;
+
+    if (!await userMgr.IsInRoleAsync(user, Roles.SuperAdmin))
+        await userMgr.AddToRoleAsync(user, Roles.SuperAdmin);
 }
 
 public partial class Program;
