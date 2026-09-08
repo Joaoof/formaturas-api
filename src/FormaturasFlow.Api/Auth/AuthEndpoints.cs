@@ -48,8 +48,18 @@ public static class AuthEndpoints
             .Produces<ServiceTokenResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status403Forbidden);
 
+        group.MapPost("/admin/promote", PromoteRoleAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin))
+            .WithSummary("Atribui um papel a um usuario existente")
+            .WithDescription("Requer role `super_admin`. Body: `{ \"email\": \"...\", \"role\": \"super_admin\" }`.")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status403Forbidden);
+
         return app;
     }
+
+    public record PromoteRequest([Required, EmailAddress] string Email, [Required] string Role);
 
     public record MeResponse(Guid Id, string Email, string NomeCompleto, IEnumerable<string> Roles);
 
@@ -160,6 +170,23 @@ public static class AuthEndpoints
 
         var roles = await users.GetRolesAsync(user);
         return Results.Ok(new MeResponse(user.Id, user.Email!, user.NomeCompleto, roles));
+    }
+
+    private static async Task<IResult> PromoteRoleAsync(
+        [FromBody] PromoteRequest req,
+        UserManager<ApplicationUser> users,
+        RoleManager<ApplicationRole> roles)
+    {
+        var user = await users.FindByEmailAsync(req.Email);
+        if (user is null) return Results.NotFound(new { erro = "Usuario nao encontrado." });
+
+        if (!await roles.RoleExistsAsync(req.Role))
+            return Results.BadRequest(new { erro = $"Role '{req.Role}' nao existe." });
+
+        if (!await users.IsInRoleAsync(user, req.Role))
+            await users.AddToRoleAsync(user, req.Role);
+
+        return Results.NoContent();
     }
 
     private static async Task<IResult> CreateServiceTokenAsync(
