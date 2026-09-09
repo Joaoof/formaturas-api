@@ -38,6 +38,10 @@ public static class AlunoEndpoints
     {
         var group = app.MapGroup("/alunos").WithTags("Alunos").RequireAuthorization();
 
+        group.MapGet("/me", ListMineAsync)
+            .WithSummary("Lista alunos vinculados ao usuario logado (por UserId ou CPF do e-mail cpf@formandos.local)")
+            .Produces<Aluno[]>(StatusCodes.Status200OK);
+
         group.MapGet("/", ListAsync)
             .WithSummary("Lista alunos")
             .WithDescription("Aceita filtro opcional `?turmaId=<guid>` para pegar apenas alunos de uma turma.")
@@ -92,6 +96,36 @@ public static class AlunoEndpoints
             .Produces(StatusCodes.Status404NotFound);
 
         return app;
+    }
+
+    private static async Task<IResult> ListMineAsync(AppDbContext db, HttpContext ctx)
+    {
+        var sub = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                  ?? ctx.User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(sub, out var userId))
+            return Results.Unauthorized();
+
+        var emailClaim = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                         ?? ctx.User.FindFirst("email")?.Value;
+        string? cpfDoEmail = null;
+        if (!string.IsNullOrWhiteSpace(emailClaim))
+        {
+            var localPart = emailClaim.Split('@')[0];
+            var digits = new string(localPart.Where(char.IsDigit).ToArray());
+            if (digits.Length == 11) cpfDoEmail = digits;
+        }
+
+        var q = db.Alunos.Include(a => a.Turma)
+            .Include(a => a.Contratos).ThenInclude(c => c.Parcelas)
+            .AsQueryable();
+
+        if (cpfDoEmail is null)
+            q = q.Where(a => a.UserId == userId);
+        else
+            q = q.Where(a => a.UserId == userId || a.Cpf == cpfDoEmail);
+
+        var alunos = await q.AsNoTracking().ToListAsync();
+        return Results.Ok(alunos);
     }
 
     private static async Task<IResult> ListAsync(AppDbContext db, [FromQuery] Guid? turmaId = null, [FromQuery] string? status = null)

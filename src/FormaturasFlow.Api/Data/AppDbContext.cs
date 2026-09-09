@@ -14,6 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Despesa> Despesas => Set<Despesa>();
     public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
     public DbSet<Cobranca> Cobrancas => Set<Cobranca>();
+    public DbSet<AgendaEvento> AgendaEventos => Set<AgendaEvento>();
     public DbSet<Auth.RefreshToken> RefreshTokens => Set<Auth.RefreshToken>();
     public DbSet<Auth.ServiceToken> ServiceTokens => Set<Auth.ServiceToken>();
 
@@ -93,6 +94,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
             e.Property(x => x.ValorPago).HasPrecision(12, 2);
             e.Property(x => x.Status).HasConversion<string>();
             e.Property(x => x.TipoEvento).HasConversion<string>();
+        });
+
+        b.Entity<AgendaEvento>(e =>
+        {
+            e.ToTable("agenda_eventos");
+            e.HasIndex(x => x.DataEvento);
         });
 
         b.Entity<Auth.RefreshToken>(e =>

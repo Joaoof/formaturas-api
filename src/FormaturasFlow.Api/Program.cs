@@ -141,6 +141,8 @@ v1.MapParcelaEndpoints();
 v1.MapPagamentoEndpoints();
 v1.MapCobrancaEndpoints();
 v1.MapDespesaEndpoints();
+v1.MapAgendaEndpoints();
+v1.MapPublicEndpoints();
 
 app.Run();
 
