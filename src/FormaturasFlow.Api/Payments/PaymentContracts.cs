@@ -55,4 +55,8 @@ public record CobrancaCriada(
     string?         BoletoLinhaDigitavel = null,
     string?         BoletoCodigoBarras = null,
     string?         PixCopiaCola = null,
-    string?         PixQrCodeUrl = null);
+    string?         PixQrCodeUrl = null,
+
+    /*  Quanto o PSP diz ter recebido.  Nulo quando o provedor não informa —
+        não confundir com zero, que é "emitida e ainda não paga".  */
+    decimal?        ValorPago = null);

@@ -1,19 +1,16 @@
 using System.Security.Cryptography.X509Certificates;
-using Microsoft.Extensions.Options;
 
 namespace FormaturasFlow.Api.Payments;
 
+/*  Handler mTLS: a Cora só responde no host matls-clients.* e exige o
+    certificado do cliente já no handshake — inclusive no /token.  */
 public class CoraHttpHandler : HttpClientHandler
 {
-    public CoraHttpHandler(IOptions<CoraOptions> opt)
+    public CoraHttpHandler(CoraCredentials credenciais)
     {
-        var o = opt.Value;
-
-        if (!string.IsNullOrWhiteSpace(o.CertificateBase64))
+        if (credenciais.Certificado is not null)
         {
-            var raw = Convert.FromBase64String(o.CertificateBase64);
-            var cert = X509CertificateLoader.LoadPkcs12(raw, o.CertificatePassword);
-            ClientCertificates.Add(cert);
+            ClientCertificates.Add(credenciais.Certificado);
             ClientCertificateOptions = ClientCertificateOption.Manual;
         }
     }

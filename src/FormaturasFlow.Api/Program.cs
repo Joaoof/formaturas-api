@@ -1,10 +1,12 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using FormaturasFlow.Api.Auth;
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Efi;
 using FormaturasFlow.Api.Endpoints;
 using FormaturasFlow.Api.Payments;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -66,12 +68,23 @@ builder.Services.AddHttpClient<EfiClient>()
     como dado (PaymentRoutingPolicy.Padrao).  */
 builder.Services.AddHttpClient<AsaasPaymentGateway>();
 
+/*  Singletons: o certificado mTLS é caro de carregar e o handler é
+    transiente — sem isso, cada requisição reimportaria o PKCS#12.  O cache
+    de token precisa do mesmo tratamento, porque o typed client é transiente
+    e um cache dentro dele nasceria vazio a cada emissão.  */
+builder.Services.AddSingleton<CoraCredentials>();
+builder.Services.AddSingleton<CoraTokenProvider>();
 builder.Services.AddTransient<CoraHttpHandler>();
+
+builder.Services.AddHttpClient(CoraTokenProvider.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler<CoraHttpHandler>();
+
 builder.Services.AddHttpClient<CoraPaymentGateway>()
     .ConfigurePrimaryHttpMessageHandler<CoraHttpHandler>();
 
 builder.Services.AddTransient<IPaymentGateway>(sp => sp.GetRequiredService<AsaasPaymentGateway>());
 builder.Services.AddTransient<IPaymentGateway>(sp => sp.GetRequiredService<CoraPaymentGateway>());
+builder.Services.AddTransient<IConsultaCobranca>(sp => sp.GetRequiredService<CoraPaymentGateway>());
 
 builder.Services.AddSingleton(PaymentRoutingPolicy.Padrao);
 builder.Services.AddScoped<IPaymentRouter, PaymentGatewayFactory>();
@@ -82,6 +95,20 @@ builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173"])
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
+
+/*  O webhook da Cora é anônimo e cada POST aceito custa uma ida à Cora
+    (token + consulta mTLS).  A janela limita o estrago de quem descobrir a
+    URL, sem atrapalhar o volume real de notificações.  */
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddFixedWindowLimiter(CoraWebhookEndpoints.RateLimitPolicy, w =>
+    {
+        w.PermitLimit = 120;
+        w.Window = TimeSpan.FromMinutes(1);
+        w.QueueLimit = 0;
+    });
+});
 
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
@@ -98,6 +125,7 @@ using (var scope = app.Services.CreateScope())
 
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -124,6 +152,7 @@ v1.MapContratoEndpoints();
 v1.MapParcelaEndpoints();
 v1.MapEfiEndpoints();
 v1.MapPaymentEndpoints();
+v1.MapCoraWebhookEndpoints();
 
 app.Run();
 

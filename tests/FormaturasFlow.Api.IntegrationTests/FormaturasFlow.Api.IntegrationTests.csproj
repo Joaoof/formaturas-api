@@ -13,6 +13,8 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2" />
     <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <!-- Permite que o teste ao vivo contra a Cora se ignore sozinho quando a credencial não está presente (CI). -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.23" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.1.0" />
     <PackageReference Include="Respawn" Version="6.2.1" />
