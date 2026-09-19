@@ -67,7 +67,8 @@ public static class CoraWebhookEndpoints
             .WithDescription("""
                 Anônimo por necessidade: quem chama é a Cora, não um usuário
                 logado. Exige `Cora:WebhookSecret` configurado e enviado no
-                header `X-Webhook-Secret`.
+                header `X-Webhook-Secret` ou, se o painel do PSP não permitir
+                cabeçalho, na query `?secret=`.
                 O corpo serve apenas para descobrir o id da fatura — o estado
                 é sempre reconfirmado na API da Cora por mTLS, de modo que um
                 POST forjado não marca nada como pago.
@@ -229,22 +230,33 @@ public static class CoraWebhookEndpoints
     private static IConsultaCobranca? Cora(IEnumerable<IConsultaCobranca> consultas) =>
         consultas.FirstOrDefault(c => c.Provider == PaymentProvider.Cora);
 
-    /*  Comparação em tempo constante e header único: `Contains` num header
-        livre aceitaria qualquer valor que apenas CONTIVESSE o segredo, e
-        comparação curto-circuitada abre oráculo de timing.  */
+    /*  Header é o caminho preferido.  A query existe porque o painel do PSP
+        nem sempre deixa configurar cabeçalho — só a URL — e nesse caso a
+        alternativa seria o webhook levar 401 para sempre.  É o mesmo arranjo
+        já usado no webhook da Efí neste projeto.
+
+        O custo é conhecido: query string costuma aparecer em log de acesso.
+        Aceitável aqui porque o segredo apenas barra ruído; quem autoriza a
+        baixa é a reconsulta por mTLS, que um segredo vazado não destrava.
+
+        A comparação é em tempo constante, e o valor sai de UM campo
+        nomeado: `Contains` num header livre aceitaria qualquer coisa que
+        apenas CONTIVESSE o segredo.  */
     private static bool SegredoConfere(HttpContext ctx, string segredo)
     {
-        if (!ctx.Request.Headers.TryGetValue("X-Webhook-Secret", out var valores))
-            return false;
+        if (ctx.Request.Headers.TryGetValue("X-Webhook-Secret", out var header)
+            && Confere(header.ToString(), segredo))
+            return true;
 
-        var recebido = valores.ToString();
-        if (string.IsNullOrEmpty(recebido))
-            return false;
+        return ctx.Request.Query.TryGetValue("secret", out var query)
+            && Confere(query.ToString(), segredo);
+    }
 
-        return CryptographicOperations.FixedTimeEquals(
+    private static bool Confere(string? recebido, string segredo) =>
+        !string.IsNullOrEmpty(recebido)
+        && CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(recebido),
             Encoding.UTF8.GetBytes(segredo));
-    }
 
     /*  A Cora já variou o envelope entre versões (ora a fatura na raiz, ora
         sob `resource`/`data`/`invoice`).  Em vez de casar com um formato

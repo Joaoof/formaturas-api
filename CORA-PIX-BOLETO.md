@@ -143,6 +143,15 @@ POST /api/v1/pagamentos/webhooks/cora
 X-Webhook-Secret: <o mesmo valor de Cora:WebhookSecret>
 ```
 
+Se o painel da Cora não deixar configurar cabeçalho, use a URL com o segredo na
+query, que também é aceita:
+
+```
+https://sua-api/api/v1/pagamentos/webhooks/cora?secret=<Cora:WebhookSecret>
+```
+
+Prefira o cabeçalho. A query costuma aparecer em log de acesso.
+
 Anônimo por necessidade — quem chama é a Cora, não um usuário logado. Configure
 a URL no painel da Cora.
 
@@ -218,7 +227,7 @@ Respostas:
 |---|---|
 | 200 | Processado, com o status da fatura |
 | 202 | Corpo sem id reconhecível, descartado de propósito para a Cora não reenviar para sempre |
-| 401 | Segredo ausente ou divergente |
+| 401 | Segredo ausente ou divergente, no cabeçalho e na query |
 | 429 | Acima de 120 requisições por minuto |
 | 503 | `Cora:WebhookSecret` não configurado — a Cora deve reenviar depois do ajuste |
 
