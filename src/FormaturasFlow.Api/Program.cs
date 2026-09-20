@@ -39,9 +39,17 @@ builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connectionString));
 builder.Services
     .AddIdentityCore<ApplicationUser>(o =>
     {
-        o.Password.RequiredLength = 8;
+        /*  Alunos logam com o CPF como senha inicial (11 dígitos). As
+            exigências de maiúscula/minúscula/símbolo do Identity default
+            invalidam essa senha e quebram silenciosamente a adesão pública.
+            Mantemos comprimento mínimo de 8 (o CPF tem 11) e obrigamos ao
+            menos um dígito — bloqueia senhas triviais como "aaaaaaaa". */
+        o.Password.RequiredLength         = 8;
+        o.Password.RequireDigit           = true;
+        o.Password.RequireLowercase       = false;
+        o.Password.RequireUppercase       = false;
         o.Password.RequireNonAlphanumeric = false;
-        o.User.RequireUniqueEmail = true;
+        o.User.RequireUniqueEmail         = true;
         o.Lockout.MaxFailedAccessAttempts = 5;
     })
     .AddRoles<ApplicationRole>()
