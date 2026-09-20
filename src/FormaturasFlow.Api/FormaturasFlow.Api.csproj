@@ -6,6 +6,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!--
+    Mapeamento e idempotência da Cora são `internal`: fazem parte do adapter,
+    não do contrato público. Ainda assim precisam de teste direto, porque é
+    onde mora o formato do provedor.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="FormaturasFlow.Api.UnitTests" />
+    <InternalsVisibleTo Include="FormaturasFlow.Api.IntegrationTests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.0" />

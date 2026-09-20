@@ -1,11 +1,14 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using FormaturasFlow.Api.Asaas;
 using FormaturasFlow.Api.Auth;
 using FormaturasFlow.Api.Cora;
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Endpoints;
 using FormaturasFlow.Api.Pagamentos;
+using FormaturasFlow.Api.Payments;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -14,8 +17,19 @@ using Scalar.AspNetCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
-builder.Services.Configure<AsaasOptions>(builder.Configuration.GetSection(AsaasOptions.SectionName));
-builder.Services.Configure<CoraOptions>(builder.Configuration.GetSection(CoraOptions.SectionName));
+
+/*  Duas versoes das options coexistem durante a transicao para a nova
+    arquitetura de pagamentos. O legado (Asaas/AsaasClient, Cora/CoraClient +
+    PagamentoService) atende o endpoint standalone /api/v1/cobrancas; o novo
+    (Payments.*) atende /api/v1/pagamentos com roteamento por dominio. */
+builder.Services.Configure<FormaturasFlow.Api.Asaas.AsaasOptions>(
+    builder.Configuration.GetSection(FormaturasFlow.Api.Asaas.AsaasOptions.SectionName));
+builder.Services.Configure<FormaturasFlow.Api.Cora.CoraOptions>(
+    builder.Configuration.GetSection(FormaturasFlow.Api.Cora.CoraOptions.SectionName));
+builder.Services.Configure<FormaturasFlow.Api.Payments.AsaasOptions>(
+    builder.Configuration.GetSection(FormaturasFlow.Api.Payments.AsaasOptions.SectionName));
+builder.Services.Configure<FormaturasFlow.Api.Payments.CoraOptions>(
+    builder.Configuration.GetSection(FormaturasFlow.Api.Payments.CoraOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("ConnectionStrings:Default ausente.");
@@ -56,13 +70,39 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<JwtTokenService>();
 
+// --- Legado: PagamentoService (usa Asaas/AsaasClient + Cora/CoraClient) ---
 builder.Services.AddHttpClient<AsaasClient>();
-
-builder.Services.AddTransient<CoraHttpHandler>();
+builder.Services.AddTransient<FormaturasFlow.Api.Cora.CoraHttpHandler>();
 builder.Services.AddHttpClient<CoraClient>()
-    .ConfigurePrimaryHttpMessageHandler<CoraHttpHandler>();
-
+    .ConfigurePrimaryHttpMessageHandler<FormaturasFlow.Api.Cora.CoraHttpHandler>();
 builder.Services.AddScoped<PagamentoService>();
+
+/*  Composition root do roteamento de pagamentos (nova arquitetura): este eh o
+    UNICO ponto do sistema que conhece Asaas e Cora. Endpoints e use cases veem
+    apenas IPaymentRouter, e a matriz de dominio x metodo eh injetada como dado
+    (PaymentRoutingPolicy.Padrao).  */
+builder.Services.AddHttpClient<AsaasPaymentGateway>();
+
+/*  Singletons: o certificado mTLS eh caro de carregar e o handler eh
+    transiente — sem isso, cada requisicao reimportaria o PKCS#12. O cache
+    de token precisa do mesmo tratamento, porque o typed client eh transiente
+    e um cache dentro dele nasceria vazio a cada emissao.  */
+builder.Services.AddSingleton<CoraCredentials>();
+builder.Services.AddSingleton<CoraTokenProvider>();
+builder.Services.AddTransient<FormaturasFlow.Api.Payments.CoraHttpHandler>();
+
+builder.Services.AddHttpClient(CoraTokenProvider.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler<FormaturasFlow.Api.Payments.CoraHttpHandler>();
+
+builder.Services.AddHttpClient<CoraPaymentGateway>()
+    .ConfigurePrimaryHttpMessageHandler<FormaturasFlow.Api.Payments.CoraHttpHandler>();
+
+builder.Services.AddTransient<IPaymentGateway>(sp => sp.GetRequiredService<AsaasPaymentGateway>());
+builder.Services.AddTransient<IPaymentGateway>(sp => sp.GetRequiredService<CoraPaymentGateway>());
+builder.Services.AddTransient<IConsultaCobranca>(sp => sp.GetRequiredService<CoraPaymentGateway>());
+
+builder.Services.AddSingleton(PaymentRoutingPolicy.Padrao);
+builder.Services.AddScoped<IPaymentRouter, PaymentGatewayFactory>();
 
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
@@ -84,7 +124,23 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     })
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
+/*  O webhook da Cora eh anonimo e cada POST aceito custa uma ida a Cora
+    (token + consulta mTLS). A janela limita o estrago de quem descobrir a
+    URL, sem atrapalhar o volume real de notificacoes.  */
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    o.AddFixedWindowLimiter(CoraWebhookEndpoints.RateLimitPolicy, w =>
+    {
+        w.PermitLimit = 120;
+        w.Window = TimeSpan.FromMinutes(1);
+        w.QueueLimit = 0;
+    });
+});
+
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<DomainExceptionHandler>();
+builder.Services.AddExceptionHandler<PaymentGatewayExceptionHandler>();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -114,6 +170,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
+app.UseRateLimiter();
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -143,6 +200,8 @@ v1.MapCobrancaEndpoints();
 v1.MapDespesaEndpoints();
 v1.MapAgendaEndpoints();
 v1.MapPublicEndpoints();
+v1.MapPaymentEndpoints();
+v1.MapCoraWebhookEndpoints();
 
 app.Run();
 

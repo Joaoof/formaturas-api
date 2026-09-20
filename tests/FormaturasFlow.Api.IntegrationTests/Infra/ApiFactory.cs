@@ -21,6 +21,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     private Respawner? _respawner;
 
+    public const string CoraWebhookSecret = "segredo-webhook-cora-de-teste";
+
     public string ConnectionString => _pg.GetConnectionString();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -40,27 +42,43 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         Environment.SetEnvironmentVariable("Asaas__Sandbox", "true");
         Environment.SetEnvironmentVariable("Asaas__ApiKey", "test-asaas-api-key");
         Environment.SetEnvironmentVariable("Asaas__WebhookToken", "test-asaas-webhook-token");
+        Environment.SetEnvironmentVariable("Asaas__WebhookSecret", "test-asaas-webhook-secret");
         Environment.SetEnvironmentVariable("Cora__Sandbox", "true");
         Environment.SetEnvironmentVariable("Cora__ClientId", "test-cora-client");
         Environment.SetEnvironmentVariable("Cora__WebhookToken", "test-cora-webhook-token");
+        Environment.SetEnvironmentVariable("Cora__WebhookSecret", CoraWebhookSecret);
 
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
 
+        /*  A sobrecarga que recebe string só atende SQL Server; para Postgres
+            é obrigatório passar a conexão, senão o Respawn lança
+            ArgumentException e TODO teste de integração falha no arranque.  */
         await using var conn = new NpgsqlConnection(ConnectionString);
         await conn.OpenAsync();
+
         _respawner = await Respawner.CreateAsync(conn, new RespawnerOptions
         {
             DbAdapter = DbAdapter.Postgres,
             SchemasToInclude = ["public"],
-            TablesToIgnore = [new Respawn.Graph.Table("__EFMigrationsHistory")]
+
+            /*  AspNetRoles é dado de referência, semeado uma vez no arranque
+                da aplicação.  Limpá-lo entre testes deixaria o processo sem
+                os papéis, e toda requisição autorizada morreria com
+                "Role SUPER_ADMIN does not exist".  */
+            TablesToIgnore =
+            [
+                new Respawn.Graph.Table("__EFMigrationsHistory"),
+                new Respawn.Graph.Table("AspNetRoles")
+            ]
         });
     }
 
     public async Task ResetDatabaseAsync()
     {
         if (_respawner is null) return;
+
         await using var conn = new NpgsqlConnection(ConnectionString);
         await conn.OpenAsync();
         await _respawner.ResetAsync(conn);
