@@ -1,5 +1,7 @@
+using FormaturasFlow.Api.Auth;
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Domain;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +27,8 @@ public static class AlunoEndpoints
         DateOnly? DataNascimento);
 
     public record AlunoInativar(string? Motivo);
+
+    public record VincularUserRequest(string Email);
 
     public record AlunoLinks(
         string? LinkFotosSelecionadas,
@@ -94,6 +98,12 @@ public static class AlunoEndpoints
         group.MapPut("/{id:guid}/links", UpdateLinksAsync)
             .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
             .WithSummary("Atualiza links de fotos selecionadas e aprovacao de album")
+            .Produces<Aluno>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
+        group.MapPost("/{id:guid}/vincular-user", VincularUserAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
+            .WithSummary("Vincula a conta Identity (por email) ao Aluno.UserId e garante role aluno")
             .Produces<Aluno>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound);
 
@@ -229,6 +239,31 @@ public static class AlunoEndpoints
 
         await db.SaveChangesAsync();
         return Results.Ok(a);
+    }
+
+    private static async Task<IResult> VincularUserAsync(
+        Guid id,
+        [FromBody] VincularUserRequest req,
+        AppDbContext db,
+        UserManager<ApplicationUser> users)
+    {
+        var aluno = await db.Alunos.FirstOrDefaultAsync(a => a.Id == id);
+        if (aluno is null) return Results.NotFound(new { erro = "Aluno nao encontrado." });
+
+        var user = await users.FindByEmailAsync(req.Email);
+        if (user is null) return Results.NotFound(new { erro = "Usuario Identity nao encontrado. Faca o /auth/register antes." });
+
+        aluno.UserId = user.Id;
+        var cpfDigits = new string((aluno.Cpf ?? "").Where(char.IsDigit).ToArray());
+        if (cpfDigits.Length == 11 && string.IsNullOrWhiteSpace(aluno.LoginUsuario))
+            aluno.LoginUsuario = cpfDigits;
+        aluno.AtualizadoEm = DateTimeOffset.UtcNow;
+
+        if (!await users.IsInRoleAsync(user, Roles.Aluno))
+            await users.AddToRoleAsync(user, Roles.Aluno);
+
+        await db.SaveChangesAsync();
+        return Results.Ok(aluno);
     }
 
     private static async Task<IResult> UpdateLinksAsync(Guid id, [FromBody] AlunoLinks req, AppDbContext db)
