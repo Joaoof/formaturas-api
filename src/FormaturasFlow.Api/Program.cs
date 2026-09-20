@@ -208,6 +208,7 @@ v1.MapPagamentoEndpoints();
 v1.MapCobrancaEndpoints();
 v1.MapDespesaEndpoints();
 v1.MapAgendaEndpoints();
+v1.MapColaboradorEndpoints();
 v1.MapPublicEndpoints();
 v1.MapPaymentEndpoints();
 v1.MapCoraWebhookEndpoints();

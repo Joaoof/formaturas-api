@@ -15,6 +15,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<WebhookEvent> WebhookEvents => Set<WebhookEvent>();
     public DbSet<Cobranca> Cobrancas => Set<Cobranca>();
     public DbSet<AgendaEvento> AgendaEventos => Set<AgendaEvento>();
+    public DbSet<Colaborador> Colaboradores => Set<Colaborador>();
+    public DbSet<LancamentoColaborador> LancamentosColaboradores => Set<LancamentoColaborador>();
     public DbSet<Auth.RefreshToken> RefreshTokens => Set<Auth.RefreshToken>();
     public DbSet<Auth.ServiceToken> ServiceTokens => Set<Auth.ServiceToken>();
 
@@ -100,6 +102,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             e.ToTable("agenda_eventos");
             e.HasIndex(x => x.DataEvento);
+        });
+
+        b.Entity<Colaborador>(e =>
+        {
+            e.ToTable("colaboradores");
+            e.HasIndex(x => x.Nome);
+            e.HasIndex(x => x.Status);
+            e.Property(x => x.Status).HasConversion<string>();
+            e.Property(x => x.SalarioBase).HasPrecision(12, 2);
+        });
+
+        b.Entity<LancamentoColaborador>(e =>
+        {
+            e.ToTable("lancamentos_colaboradores");
+            e.HasIndex(x => x.ColaboradorId);
+            e.HasIndex(x => x.ReferenciaMesAno);
+            e.Property(x => x.Tipo).HasConversion<string>();
+            e.Property(x => x.Valor).HasPrecision(12, 2);
+            e.HasOne(x => x.Colaborador).WithMany(c => c.Lancamentos)
+                .HasForeignKey(x => x.ColaboradorId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<Auth.RefreshToken>(e =>
