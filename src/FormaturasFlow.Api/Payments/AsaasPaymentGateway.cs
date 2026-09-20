@@ -24,8 +24,7 @@ public sealed class AsaasPaymentGateway(
 
     public async Task<CobrancaCriada> CriarCobrancaAsync(CobrancaRequest req, CancellationToken ct = default)
     {
-        http.DefaultRequestHeaders.Remove("access_token");
-        http.DefaultRequestHeaders.Add("access_token", _opt.ApiKey);
+        GarantirHeadersPadrao();
 
         var payload = new Dictionary<string, object?>
         {
@@ -118,10 +117,23 @@ public sealed class AsaasPaymentGateway(
         };
     }
 
+    /*  O Asaas rejeita requisicoes sem User-Agent com
+        400 user_agent_not_informed. Como o typed client eh transient
+        (novo HttpClient por escopo), re-aplicamos os headers a cada
+        chamada externa. `access_token` idem: sem ele todo POST volta 401. */
+    private void GarantirHeadersPadrao()
+    {
+        http.DefaultRequestHeaders.Remove("access_token");
+        http.DefaultRequestHeaders.Add("access_token", _opt.ApiKey);
+        http.DefaultRequestHeaders.UserAgent.Clear();
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("FormaturasFlow/1.0");
+    }
+
     /*  O Asaas exige um customer antes da cobrança; reaproveitamos pelo
         CPF/CNPJ para não duplicar cadastro a cada parcela.  */
     private async Task<string> ObterOuCriarClienteAsync(PagadorInfo pagador, CancellationToken ct)
     {
+        GarantirHeadersPadrao();
         var documento = Digitos(pagador.Documento);
 
         using var busca = await http.GetAsync($"{_opt.BaseUrl}/customers?cpfCnpj={documento}", ct);
