@@ -189,6 +189,7 @@ app.MapGet("/", () => Results.Ok(new
 app.MapHealthChecks("/health");
 
 app.MapAuthEndpoints();
+app.MapPagamentoWebhookEndpoints();
 
 var v1 = app.MapGroup("/api/v1");
 v1.MapTurmaEndpoints();

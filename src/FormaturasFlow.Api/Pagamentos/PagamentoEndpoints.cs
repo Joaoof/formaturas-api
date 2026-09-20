@@ -13,6 +13,30 @@ public static class PagamentoEndpoints
 {
     public record CriarCobrancaRequest(string Tipo, int? NumParcelasCartao);
 
+    /*  Webhooks ficam em rotas SEM prefixo /api/v1: PSPs (Asaas, Cora) so aceitam
+        URLs registradas no painel deles, entao mantemos as URLs historicas
+        /webhooks/asaas e /webhooks/cora estaveis fora do versionamento. */
+    public static IEndpointRouteBuilder MapPagamentoWebhookEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapPost("/webhooks/asaas", WebhookAsaasAsync)
+            .AllowAnonymous()
+            .WithTags("Pagamentos")
+            .WithSummary("Webhook publico do Asaas — nao chame direto")
+            .WithDescription("Chamado quando um pagamento e recebido/confirmado. Autenticacao via header `asaas-access-token`. Idempotente por eventId.")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        app.MapPost("/webhooks/cora", WebhookCoraAsync)
+            .AllowAnonymous()
+            .WithTags("Pagamentos")
+            .WithSummary("Webhook publico da Cora (legado) — nao chame direto")
+            .WithDescription("Chamado quando uma invoice muda de status. Autenticacao via header `x-cora-signature`. Idempotente por eventId.")
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        return app;
+    }
+
     public static IEndpointRouteBuilder MapPagamentoEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/parcelas/{id:guid}/cobranca", CriarCobrancaAsync)
@@ -39,22 +63,6 @@ public static class PagamentoEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status403Forbidden);
-
-        app.MapPost("/webhooks/asaas", WebhookAsaasAsync)
-            .AllowAnonymous()
-            .WithTags("Pagamentos")
-            .WithSummary("Webhook publico do Asaas — nao chame direto")
-            .WithDescription("Chamado quando um pagamento e recebido/confirmado. Autenticacao via header `asaas-access-token`. Idempotente por eventId.")
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized);
-
-        app.MapPost("/webhooks/cora", WebhookCoraAsync)
-            .AllowAnonymous()
-            .WithTags("Pagamentos")
-            .WithSummary("Webhook publico da Cora — nao chame direto")
-            .WithDescription("Chamado quando uma invoice muda de status. Autenticacao via header `x-cora-signature`. Idempotente por eventId.")
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status401Unauthorized);
 
         return app;
     }

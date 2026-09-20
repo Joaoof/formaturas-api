@@ -114,19 +114,6 @@ public static class ContratoEndpoints
         };
         db.Contratos.Add(contrato);
 
-        if (req.ValorEntrada > 0)
-        {
-            db.Parcelas.Add(new Parcela
-            {
-                ContratoId = contrato.Id,
-                Numero = 0,
-                Valor = req.ValorEntrada,
-                ValorPago = 0,
-                Vencimento = DateOnly.FromDateTime(DateTime.UtcNow),
-                Status = StatusParcela.Pendente
-            });
-        }
-
         for (var i = 1; i <= req.NumParcelas; i++)
         {
             var venc = req.PrimeiroVencimento.AddMonths(i - 1);
@@ -172,18 +159,6 @@ public static class ContratoEndpoints
 
             var valorParcela = Math.Round(saldo / c.NumParcelas, 2);
             var resto = saldo - (valorParcela * c.NumParcelas);
-
-            if (c.ValorEntrada > 0)
-            {
-                db.Parcelas.Add(new Parcela
-                {
-                    ContratoId = c.Id,
-                    Numero = 0,
-                    Valor = c.ValorEntrada,
-                    Vencimento = DateOnly.FromDateTime(DateTime.UtcNow),
-                    Status = StatusParcela.Pendente
-                });
-            }
 
             for (var i = 1; i <= c.NumParcelas; i++)
             {
