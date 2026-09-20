@@ -55,15 +55,15 @@ services:
       Asaas__WebhookToken: ${ASAAS_WEBHOOK_TOKEN}
       Asaas__WebhookSecret: ${ASAAS_WEBHOOK_SECRET}
       Cora__Sandbox: ${CORA_SANDBOX:-true}
-      Cora__ClientId: ${CORA_CLIENT_ID}
-      Cora__CertificateBase64: ${CORA_CERTIFICATE_BASE64}
-      Cora__CertificatePassword: ${CORA_CERTIFICATE_PASSWORD}
-      Cora__ClientCertificatePath: ${CORA_CLIENT_CERTIFICATE_PATH:-}
-      Cora__PrivateKeyPath: ${CORA_PRIVATE_KEY_PATH:-}
-      Cora__ClientCertificateContent: ${CORA_CLIENT_CERTIFICATE_CONTENT:-}
-      Cora__PrivateKeyContent: ${CORA_PRIVATE_KEY_CONTENT:-}
-      Cora__WebhookToken: ${CORA_WEBHOOK_TOKEN}
-      Cora__WebhookSecret: ${CORA_WEBHOOK_SECRET}
+      Cora__ClientId: ${CORA_CLIENT_ID:-}
+      Cora__CertificatePemPath: ${CORA_CERTIFICATE_PEM_PATH:-}
+      Cora__PrivateKeyPemPath: ${CORA_PRIVATE_KEY_PEM_PATH:-}
+      Cora__CertificatePem: ${CORA_CERTIFICATE_PEM:-}
+      Cora__PrivateKeyPem: ${CORA_PRIVATE_KEY_PEM:-}
+      Cora__CertificateBase64: ${CORA_CERTIFICATE_BASE64:-}
+      Cora__CertificatePassword: ${CORA_CERTIFICATE_PASSWORD:-}
+      Cora__WebhookToken: ${CORA_WEBHOOK_TOKEN:-}
+      Cora__WebhookSecret: ${CORA_WEBHOOK_SECRET:-}
       Cors__Origins__0: ${CORS_ORIGIN_0:-http://localhost:5173}
       TZ: America/Sao_Paulo
     healthcheck:
