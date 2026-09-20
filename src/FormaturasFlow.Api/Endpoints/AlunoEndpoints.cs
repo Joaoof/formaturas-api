@@ -32,6 +32,8 @@ public static class AlunoEndpoints
         DateOnly? VencimentoFotosSelecionadas,
         bool? FotosLiberadas,
         string? LinkAprovacaoAlbum,
+        int? PrazoAprovacaoAlbum,
+        DateOnly? VencimentoAprovacaoAlbum,
         bool? AlbumLiberado);
 
     public static IEndpointRouteBuilder MapAlunoEndpoints(this IEndpointRouteBuilder app)
@@ -244,6 +246,13 @@ public static class AlunoEndpoints
             a.VencimentoFotosSelecionadas = req.VencimentoFotosSelecionadas;
         if (req.FotosLiberadas.HasValue) a.FotosLiberadas = req.FotosLiberadas.Value;
         if (req.LinkAprovacaoAlbum is not null) a.LinkAprovacaoAlbum = req.LinkAprovacaoAlbum;
+        if (req.PrazoAprovacaoAlbum.HasValue)
+        {
+            a.PrazoAprovacaoAlbum = req.PrazoAprovacaoAlbum;
+            a.VencimentoAprovacaoAlbum = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(req.PrazoAprovacaoAlbum.Value);
+        }
+        if (req.VencimentoAprovacaoAlbum.HasValue)
+            a.VencimentoAprovacaoAlbum = req.VencimentoAprovacaoAlbum;
         if (req.AlbumLiberado.HasValue) a.AlbumLiberado = req.AlbumLiberado.Value;
 
         a.AtualizadoEm = DateTimeOffset.UtcNow;

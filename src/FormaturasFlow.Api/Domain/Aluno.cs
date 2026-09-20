@@ -34,6 +34,8 @@ public class Aluno
     public DateOnly? VencimentoFotosSelecionadas { get; set; }
     public bool FotosLiberadas { get; set; }
     public string? LinkAprovacaoAlbum { get; set; }
+    public int? PrazoAprovacaoAlbum { get; set; }
+    public DateOnly? VencimentoAprovacaoAlbum { get; set; }
     public bool AlbumLiberado { get; set; }
 
     public string? AsaasCustomerId { get; set; }
