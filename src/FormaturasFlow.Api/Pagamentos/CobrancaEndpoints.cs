@@ -75,7 +75,9 @@ public static class CobrancaEndpoints
         CancellationToken ct)
     {
         if (!Enum.TryParse<TipoPagamento>(req.Tipo, ignoreCase: true, out var tipo))
-            return Results.BadRequest(new { erro = "tipo invalido. Use 'pix', 'boleto', 'cartao' ou 'checkout'." });
+            throw new DadosInvalidosException(
+                "PAGAMENTO_TIPO_INVALIDO",
+                "Tipo de pagamento invalido. Use 'pix', 'boleto', 'cartao' ou 'checkout'.");
 
         var existente = await db.Cobrancas
             .FirstOrDefaultAsync(x => x.ExternalReference == req.ExternalReference, ct);
@@ -103,12 +105,14 @@ public static class CobrancaEndpoints
     private static async Task<IResult> GetByRefAsync(string externalRef, AppDbContext db, CancellationToken ct)
     {
         var c = await db.Cobrancas.AsNoTracking().FirstOrDefaultAsync(x => x.ExternalReference == externalRef, ct);
-        return c is null ? Results.NotFound() : Results.Ok(c);
+        if (c is null) throw new RecursoNaoEncontradoException("Cobranca", externalRef);
+        return Results.Ok(c);
     }
 
     private static async Task<IResult> GetAsync(Guid id, AppDbContext db, CancellationToken ct)
     {
         var c = await db.Cobrancas.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
-        return c is null ? Results.NotFound() : Results.Ok(c);
+        if (c is null) throw new RecursoNaoEncontradoException("Cobranca", id);
+        return Results.Ok(c);
     }
 }

@@ -32,7 +32,7 @@ public static class PublicEndpoints
         group.MapGet("/turmas/{id:guid}", async (Guid id, AppDbContext db) =>
         {
             var t = await db.Turmas.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
-            if (t is null) return Results.NotFound();
+            if (t is null) throw new RecursoNaoEncontradoException("Turma", id);
             return Results.Ok(new TurmaPublica(
                 t.Id, t.Nome, t.Curso, t.Faculdade, t.Instituicao,
                 t.Cidade, t.Semestre, t.AnoFormatura, t.PrevisaoFormatura,
@@ -55,10 +55,10 @@ public static class PublicEndpoints
     private static async Task<IResult> AdesaoAsync(AdesaoRequest req, AppDbContext db)
     {
         var cpf = ApenasDigitos(req.DadosPessoais.Cpf);
-        if (cpf.Length != 11) return Results.BadRequest(new { erro = "CPF invalido." });
+        if (cpf.Length != 11) throw new DadosInvalidosException("CPF_INVALIDO", "CPF invalido.");
 
         var turma = await db.Turmas.FirstOrDefaultAsync(t => t.Id == req.TurmaId);
-        if (turma is null) return Results.NotFound(new { erro = "Turma nao encontrada." });
+        if (turma is null) throw new RecursoNaoEncontradoException("Turma", req.TurmaId);
 
         await using var tx = await db.Database.BeginTransactionAsync();
 

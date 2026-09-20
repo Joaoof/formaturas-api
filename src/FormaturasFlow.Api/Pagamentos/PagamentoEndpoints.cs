@@ -75,15 +75,17 @@ public static class PagamentoEndpoints
         CancellationToken ct)
     {
         if (!Enum.TryParse<TipoPagamento>(req.Tipo, ignoreCase: true, out var tipo))
-            return Results.BadRequest(new { erro = "tipo invalido. Use 'pix', 'boleto', 'cartao' ou 'checkout'." });
+            throw new DadosInvalidosException(
+                "PAGAMENTO_TIPO_INVALIDO",
+                "Tipo de pagamento invalido. Use 'pix', 'boleto', 'cartao' ou 'checkout'.");
 
         var parcela = await db.Parcelas
             .Include(p => p.Contrato)!.ThenInclude(c => c!.Aluno)!.ThenInclude(a => a!.Turma)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
-        if (parcela is null) return Results.NotFound();
+        if (parcela is null) throw new RecursoNaoEncontradoException("Parcela", id);
         if (parcela.Status == StatusParcela.Pago)
-            return Results.Conflict(new { erro = "Parcela ja quitada." });
+            throw new ConflitoException("PARCELA_JA_QUITADA", "Parcela ja quitada.");
         if (!string.IsNullOrEmpty(parcela.PspChargeId))
             return Results.Ok(new { existente = true, parcela });
 

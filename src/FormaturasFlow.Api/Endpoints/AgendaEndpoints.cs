@@ -47,7 +47,7 @@ public static class AgendaEndpoints
         group.MapPut("/{id:guid}", async (Guid id, AgendaUpdate req, AppDbContext db) =>
         {
             var e = await db.AgendaEventos.FirstOrDefaultAsync(x => x.Id == id);
-            if (e is null) return Results.NotFound();
+            if (e is null) throw new RecursoNaoEncontradoException("Evento", id);
             e.Titulo = req.Titulo;
             e.Descricao = req.Descricao;
             e.EmpresaTipo = req.EmpresaTipo;
@@ -68,7 +68,8 @@ public static class AgendaEndpoints
         group.MapDelete("/{id:guid}", async (Guid id, AppDbContext db) =>
         {
             var deleted = await db.AgendaEventos.Where(x => x.Id == id).ExecuteDeleteAsync();
-            return deleted == 0 ? Results.NotFound() : Results.NoContent();
+            if (deleted == 0) throw new RecursoNaoEncontradoException("Evento", id);
+            return Results.NoContent();
         })
             .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
             .WithSummary("Remove um evento da agenda")

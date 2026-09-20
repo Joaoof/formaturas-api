@@ -71,7 +71,7 @@ public static class ParcelaEndpoints
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
         if (p is null || p.Contrato is null || p.Contrato.Aluno is null || p.Contrato.Aluno.Turma is null)
-            return Results.NotFound();
+            throw new RecursoNaoEncontradoException("Parcela", id);
 
         var aluno = p.Contrato.Aluno;
         var turma = aluno.Turma;
@@ -89,7 +89,7 @@ public static class ParcelaEndpoints
     private static async Task<IResult> BaixarAsync(Guid id, [FromBody] ParcelaBaixa req, AppDbContext db)
     {
         var p = await db.Parcelas.FirstOrDefaultAsync(x => x.Id == id);
-        if (p is null) return Results.NotFound();
+        if (p is null) throw new RecursoNaoEncontradoException("Parcela", id);
 
         p.Status = StatusParcela.Pago;
         p.ValorPago = req.ValorPago ?? p.Valor;
@@ -104,7 +104,7 @@ public static class ParcelaEndpoints
     private static async Task<IResult> DesfazerAsync(Guid id, AppDbContext db)
     {
         var p = await db.Parcelas.FirstOrDefaultAsync(x => x.Id == id);
-        if (p is null) return Results.NotFound();
+        if (p is null) throw new RecursoNaoEncontradoException("Parcela", id);
 
         p.Status = StatusParcela.Pendente;
         p.ValorPago = 0;

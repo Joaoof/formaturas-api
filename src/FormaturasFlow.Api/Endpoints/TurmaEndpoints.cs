@@ -108,7 +108,8 @@ public static class TurmaEndpoints
     private static async Task<IResult> GetAsync(Guid id, AppDbContext db)
     {
         var t = await db.Turmas.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
-        return t is null ? Results.NotFound() : Results.Ok(t);
+        if (t is null) throw new RecursoNaoEncontradoException("Turma", id);
+        return Results.Ok(t);
     }
 
     private static async Task<IResult> CreateAsync([FromBody] TurmaCreate req, AppDbContext db)
@@ -136,7 +137,7 @@ public static class TurmaEndpoints
     private static async Task<IResult> UpdateAsync(Guid id, [FromBody] TurmaUpdate req, AppDbContext db)
     {
         var t = await db.Turmas.FirstOrDefaultAsync(x => x.Id == id);
-        if (t is null) return Results.NotFound();
+        if (t is null) throw new RecursoNaoEncontradoException("Turma", id);
 
         t.Nome = req.Nome;
         t.Faculdade = req.Faculdade ?? req.Instituicao ?? t.Faculdade;
@@ -159,6 +160,7 @@ public static class TurmaEndpoints
     private static async Task<IResult> DeleteAsync(Guid id, AppDbContext db)
     {
         var deleted = await db.Turmas.Where(x => x.Id == id).ExecuteDeleteAsync();
-        return deleted == 0 ? Results.NotFound() : Results.NoContent();
+        if (deleted == 0) throw new RecursoNaoEncontradoException("Turma", id);
+        return Results.NoContent();
     }
 }

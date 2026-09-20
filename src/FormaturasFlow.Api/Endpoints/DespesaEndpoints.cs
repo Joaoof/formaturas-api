@@ -52,7 +52,7 @@ public static class DespesaEndpoints
         group.MapPut("/{id:guid}", async (Guid id, DespesaUpdate req, AppDbContext db) =>
         {
             var d = await db.Despesas.FirstOrDefaultAsync(x => x.Id == id);
-            if (d is null) return Results.NotFound();
+            if (d is null) throw new RecursoNaoEncontradoException("Despesa", id);
 
             d.Descricao = req.Descricao;
             d.Categoria = req.Categoria ?? d.Categoria;
@@ -77,7 +77,7 @@ public static class DespesaEndpoints
         group.MapPost("/{id:guid}/baixar", async (Guid id, DespesaBaixa req, AppDbContext db) =>
         {
             var d = await db.Despesas.FirstOrDefaultAsync(x => x.Id == id);
-            if (d is null) return Results.NotFound();
+            if (d is null) throw new RecursoNaoEncontradoException("Despesa", id);
             d.Status = StatusDespesa.Pago;
             d.DataPagamento = req.DataPagamento ?? DateOnly.FromDateTime(DateTime.UtcNow);
             if (req.FormaPagamento is not null) d.FormaPagamento = req.FormaPagamento;
@@ -92,7 +92,7 @@ public static class DespesaEndpoints
         group.MapPost("/{id:guid}/desfazer", async (Guid id, AppDbContext db) =>
         {
             var d = await db.Despesas.FirstOrDefaultAsync(x => x.Id == id);
-            if (d is null) return Results.NotFound();
+            if (d is null) throw new RecursoNaoEncontradoException("Despesa", id);
             d.Status = StatusDespesa.Pendente;
             d.DataPagamento = null;
             d.AtualizadaEm = DateTimeOffset.UtcNow;
@@ -106,7 +106,8 @@ public static class DespesaEndpoints
         group.MapDelete("/{id:guid}", async (Guid id, AppDbContext db) =>
         {
             var deleted = await db.Despesas.Where(x => x.Id == id).ExecuteDeleteAsync();
-            return deleted == 0 ? Results.NotFound() : Results.NoContent();
+            if (deleted == 0) throw new RecursoNaoEncontradoException("Despesa", id);
+            return Results.NoContent();
         })
             .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin))
             .WithSummary("Remove despesa")

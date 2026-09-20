@@ -16,14 +16,24 @@ public sealed class DomainExceptionHandler(
     {
         if (ex is not DomainException dex) return false;
 
-        log.LogWarning("Regra de negócio violada: {Codigo} — {Mensagem}", dex.Codigo, dex.Message);
+        log.LogWarning("Regra de negócio violada: {Codigo} ({Status}) — {Mensagem}",
+            dex.Codigo, dex.StatusCode, dex.Message);
 
-        ctx.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
+        ctx.Response.StatusCode = dex.StatusCode;
+
+        var titulo = dex.StatusCode switch
+        {
+            StatusCodes.Status404NotFound          => "Recurso não encontrado",
+            StatusCodes.Status400BadRequest        => "Dados inválidos",
+            StatusCodes.Status409Conflict          => "Conflito no estado do recurso",
+            StatusCodes.Status403Forbidden         => "Acesso negado",
+            _                                      => "Regra de negócio violada"
+        };
 
         var problema = new ProblemDetails
         {
-            Status = StatusCodes.Status422UnprocessableEntity,
-            Title  = "Regra de negócio violada",
+            Status = dex.StatusCode,
+            Title  = titulo,
             Detail = dex.Message,
             Type   = $"https://api.formaturasflow.com.br/errors/{dex.Codigo.ToLowerInvariant()}"
         };

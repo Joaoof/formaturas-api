@@ -159,13 +159,14 @@ public static class AlunoEndpoints
             .Include(x => x.Contratos).ThenInclude(c => c.Parcelas)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
-        return a is null ? Results.NotFound() : Results.Ok(a);
+        if (a is null) throw new RecursoNaoEncontradoException("Aluno", id);
+        return Results.Ok(a);
     }
 
     private static async Task<IResult> CreateAsync([FromBody] AlunoCreate req, AppDbContext db)
     {
         var turmaExiste = await db.Turmas.AnyAsync(t => t.Id == req.TurmaId);
-        if (!turmaExiste) return Results.NotFound(new { erro = "Turma não encontrada." });
+        if (!turmaExiste) throw new RecursoNaoEncontradoException("Turma", req.TurmaId);
 
         var a = new Aluno
         {
@@ -189,7 +190,7 @@ public static class AlunoEndpoints
     private static async Task<IResult> UpdateAsync(Guid id, [FromBody] AlunoUpdate req, AppDbContext db)
     {
         var a = await db.Alunos.FirstOrDefaultAsync(x => x.Id == id);
-        if (a is null) return Results.NotFound();
+        if (a is null) throw new RecursoNaoEncontradoException("Aluno", id);
 
         a.NomeCompleto = req.NomeCompleto;
         a.Cpf = req.Cpf; a.Rg = req.Rg;
@@ -205,14 +206,15 @@ public static class AlunoEndpoints
     private static async Task<IResult> DeleteAsync(Guid id, AppDbContext db)
     {
         var deleted = await db.Alunos.Where(x => x.Id == id).ExecuteDeleteAsync();
-        return deleted == 0 ? Results.NotFound() : Results.NoContent();
+        if (deleted == 0) throw new RecursoNaoEncontradoException("Aluno", id);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> InativarAsync(Guid id, [FromBody] AlunoInativar req, AppDbContext db)
     {
         var a = await db.Alunos.Include(x => x.Contratos).ThenInclude(c => c.Parcelas)
             .FirstOrDefaultAsync(x => x.Id == id);
-        if (a is null) return Results.NotFound();
+        if (a is null) throw new RecursoNaoEncontradoException("Aluno", id);
 
         a.Status = StatusAluno.Inativo;
         a.MotivoInativacao = req.Motivo;
@@ -231,7 +233,7 @@ public static class AlunoEndpoints
     private static async Task<IResult> ReativarAsync(Guid id, AppDbContext db)
     {
         var a = await db.Alunos.FirstOrDefaultAsync(x => x.Id == id);
-        if (a is null) return Results.NotFound();
+        if (a is null) throw new RecursoNaoEncontradoException("Aluno", id);
 
         a.Status = StatusAluno.Ativo;
         a.MotivoInativacao = null;
@@ -248,10 +250,10 @@ public static class AlunoEndpoints
         UserManager<ApplicationUser> users)
     {
         var aluno = await db.Alunos.FirstOrDefaultAsync(a => a.Id == id);
-        if (aluno is null) return Results.NotFound(new { erro = "Aluno nao encontrado." });
+        if (aluno is null) throw new RecursoNaoEncontradoException("Aluno", id);
 
         var user = await users.FindByEmailAsync(req.Email);
-        if (user is null) return Results.NotFound(new { erro = "Usuario Identity nao encontrado. Faca o /auth/register antes." });
+        if (user is null) throw new RecursoNaoEncontradoException("Usuario", req.Email);
 
         aluno.UserId = user.Id;
         var cpfDigits = new string((aluno.Cpf ?? "").Where(char.IsDigit).ToArray());
@@ -269,7 +271,7 @@ public static class AlunoEndpoints
     private static async Task<IResult> UpdateLinksAsync(Guid id, [FromBody] AlunoLinks req, AppDbContext db)
     {
         var a = await db.Alunos.FirstOrDefaultAsync(x => x.Id == id);
-        if (a is null) return Results.NotFound();
+        if (a is null) throw new RecursoNaoEncontradoException("Aluno", id);
 
         if (req.LinkFotosSelecionadas is not null) a.LinkFotosSelecionadas = req.LinkFotosSelecionadas;
         if (req.PrazoFotosSelecionadas.HasValue)

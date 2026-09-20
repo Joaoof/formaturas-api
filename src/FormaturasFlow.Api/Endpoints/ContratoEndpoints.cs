@@ -52,7 +52,8 @@ public static class ContratoEndpoints
         {
             var c = await db.Contratos.Include(x => x.Parcelas).AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == id);
-            return c is null ? Results.NotFound() : Results.Ok(c);
+            if (c is null) throw new RecursoNaoEncontradoException("Contrato", id);
+            return Results.Ok(c);
         })
             .WithSummary("Detalhe de um contrato com suas parcelas")
             .Produces<Contrato>(StatusCodes.Status200OK)
@@ -85,14 +86,14 @@ public static class ContratoEndpoints
         [FromBody] ContratoCreate req, AppDbContext db)
     {
         if (req.NumParcelas < 1)
-            return Results.BadRequest(new { erro = "num_parcelas deve ser >= 1." });
+            throw new DadosInvalidosException("CONTRATO_NUM_PARCELAS_INVALIDO", "num_parcelas deve ser >= 1.");
 
         var alunoExiste = await db.Alunos.AnyAsync(a => a.Id == req.AlunoId);
-        if (!alunoExiste) return Results.NotFound(new { erro = "Aluno não encontrado." });
+        if (!alunoExiste) throw new RecursoNaoEncontradoException("Aluno", req.AlunoId);
 
         var desconto = req.Desconto ?? 0m;
         var saldo = req.ValorTotal - req.ValorEntrada - desconto;
-        if (saldo <= 0) return Results.BadRequest(new { erro = "Saldo a parcelar precisa ser maior que zero." });
+        if (saldo <= 0) throw new DadosInvalidosException("CONTRATO_SALDO_INVALIDO", "Saldo a parcelar precisa ser maior que zero.");
 
         var valorParcela = Math.Round(saldo / req.NumParcelas, 2);
         var resto = saldo - (valorParcela * req.NumParcelas);
@@ -137,7 +138,7 @@ public static class ContratoEndpoints
     private static async Task<IResult> UpdateAsync(Guid id, [FromBody] ContratoUpdate req, AppDbContext db)
     {
         var c = await db.Contratos.Include(x => x.Parcelas).FirstOrDefaultAsync(x => x.Id == id);
-        if (c is null) return Results.NotFound();
+        if (c is null) throw new RecursoNaoEncontradoException("Contrato", id);
 
         c.Pacote = req.Pacote;
         c.ValorTotal = req.ValorTotal;
@@ -153,7 +154,7 @@ public static class ContratoEndpoints
         if (req.RecalcularParcelas == true && req.PrimeiroVencimento.HasValue)
         {
             var saldo = c.ValorTotal - c.ValorEntrada - c.Desconto;
-            if (saldo <= 0) return Results.BadRequest(new { erro = "Saldo a parcelar precisa ser maior que zero." });
+            if (saldo <= 0) throw new DadosInvalidosException("CONTRATO_SALDO_INVALIDO", "Saldo a parcelar precisa ser maior que zero.");
 
             db.Parcelas.RemoveRange(c.Parcelas);
 
@@ -182,6 +183,7 @@ public static class ContratoEndpoints
     private static async Task<IResult> DeleteAsync(Guid id, AppDbContext db)
     {
         var deleted = await db.Contratos.Where(x => x.Id == id).ExecuteDeleteAsync();
-        return deleted == 0 ? Results.NotFound() : Results.NoContent();
+        if (deleted == 0) throw new RecursoNaoEncontradoException("Contrato", id);
+        return Results.NoContent();
     }
 }
