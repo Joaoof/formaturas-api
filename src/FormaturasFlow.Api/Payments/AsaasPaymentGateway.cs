@@ -151,7 +151,11 @@ public sealed class AsaasPaymentGateway(
         if (!resp.IsSuccessStatusCode)
         {
             log.LogError("Asaas cadastro de cliente falhou: {Status} {Body}", resp.StatusCode, body);
-            throw new PaymentGatewayException(Provider, $"Falha ao cadastrar pagador no Asaas: {resp.StatusCode}");
+            /*  Inclui o corpo do Asaas na mensagem para debugar em stage sem
+                depender de acesso a logs do container. Em produção o handler
+                ainda mascara para 502 GATEWAY_INDISPONIVEL, mas o detail vem
+                com pistas concretas. */
+            throw new PaymentGatewayException(Provider, $"Falha ao cadastrar pagador no Asaas: {resp.StatusCode} — {body}");
         }
 
         using var criado = JsonDocument.Parse(body);
