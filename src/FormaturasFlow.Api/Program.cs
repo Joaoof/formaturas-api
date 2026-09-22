@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
@@ -97,16 +98,36 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 /*  O webhook da Cora é anônimo e cada POST aceito custa uma ida à Cora
-    (token + consulta mTLS).  A janela limita o estrago de quem descobrir a
-    URL, sem atrapalhar o volume real de notificações.  */
+    (token + consulta mTLS), então precisa de teto.
+
+    A cota é SEPARADA por quem apresenta o segredo.  Uma janela única para
+    todo mundo teria o efeito perverso de deixar um atacante encher o balde
+    e a notificação legítima da Cora levar 429 — ou seja, o pagamento
+    entraria e a parcela nunca seria baixada.  Quem não tem o segredo não
+    alcança o balde de quem tem.
+
+    Particionar por IP não serviria aqui: a API roda atrás de proxy, então
+    todo request chega com o IP do proxy.  */
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    o.AddFixedWindowLimiter(CoraWebhookEndpoints.RateLimitPolicy, w =>
+
+    o.AddPolicy(CoraWebhookEndpoints.RateLimitPolicy, ctx =>
     {
-        w.PermitLimit = 120;
-        w.Window = TimeSpan.FromMinutes(1);
-        w.QueueLimit = 0;
+        var segredo = ctx.RequestServices
+            .GetRequiredService<IOptions<CoraOptions>>().Value.WebhookSecret;
+
+        var autorizado = !string.IsNullOrWhiteSpace(segredo)
+            && CoraWebhookEndpoints.SegredoConfere(ctx, segredo);
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            autorizado ? "cora-autorizado" : "cora-anonimo",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = autorizado ? 600 : 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
     });
 });
 

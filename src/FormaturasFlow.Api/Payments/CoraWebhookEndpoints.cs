@@ -242,7 +242,7 @@ public static class CoraWebhookEndpoints
         A comparação é em tempo constante, e o valor sai de UM campo
         nomeado: `Contains` num header livre aceitaria qualquer coisa que
         apenas CONTIVESSE o segredo.  */
-    private static bool SegredoConfere(HttpContext ctx, string segredo)
+    internal static bool SegredoConfere(HttpContext ctx, string segredo)
     {
         if (ctx.Request.Headers.TryGetValue("X-Webhook-Secret", out var header)
             && Confere(header.ToString(), segredo))
