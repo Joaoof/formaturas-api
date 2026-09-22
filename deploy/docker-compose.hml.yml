@@ -61,6 +61,13 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE:-formaturasflow-front-hml}
       Jwt__Key: ${JWT_KEY:?defina JWT_KEY no .env.hml}
       Jwt__AccessTokenMinutes: ${JWT_ACCESS_TOKEN_MINUTES:-60}
+
+      #  Administrador garantido no arranque.  Sem isto so o PRIMEIRO
+      #  usuario cadastrado vira admin, e nao ha endpoint de promocao.
+      #  A senha vale so na criacao; trocar depois pelo app nao e desfeito.
+      Admin__Email: ${ADMIN_EMAIL:-}
+      Admin__Password: ${ADMIN_PASSWORD:-}
+      Admin__NomeCompleto: ${ADMIN_NOME:-}
       Efi__Sandbox: "true"
       Efi__ClientId: ${EFI_CLIENT_ID:-}
       Efi__ClientSecret: ${EFI_CLIENT_SECRET:-}

@@ -142,6 +142,7 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
     await SeedRolesAsync(scope.ServiceProvider);
+    await SeedAdminAsync(scope.ServiceProvider, app.Configuration);
 }
 
 app.UseExceptionHandler();
@@ -183,6 +184,57 @@ static async Task SeedRolesAsync(IServiceProvider sp)
     foreach (var r in new[] { Roles.SuperAdmin, Roles.Funcionario, Roles.Aluno })
         if (!await roleMgr.RoleExistsAsync(r))
             await roleMgr.CreateAsync(new ApplicationRole(r));
+}
+
+/*  Administrador declarado por configuração.
+
+    Sem isto não existe caminho para criar um admin: o /register só promove
+    o PRIMEIRO usuário do sistema e, depois dele, todo cadastro vira Aluno —
+    sem nenhum endpoint de promoção.  Na prática, perder o primeiro usuário
+    deixava a base sem dono, com mexer no banco à mão como única saída.
+
+    É idempotente: no arranque seguinte apenas confirma o papel.  A senha só
+    é usada na CRIAÇÃO, para um redeploy não sobrescrever silenciosamente a
+    senha que o dono já trocou.  */
+static async Task SeedAdminAsync(IServiceProvider sp, IConfiguration cfg)
+{
+    var email = cfg["Admin:Email"];
+    var senha = cfg["Admin:Password"];
+
+    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(senha))
+        return;
+
+    var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
+    var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Seed.Admin");
+
+    var user = await users.FindByEmailAsync(email);
+
+    if (user is null)
+    {
+        user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+            NomeCompleto = cfg["Admin:NomeCompleto"] ?? email
+        };
+
+        var criado = await users.CreateAsync(user, senha);
+        if (!criado.Succeeded)
+        {
+            log.LogError("Admin {Email} não pôde ser criado: {Erros}",
+                email, string.Join("; ", criado.Errors.Select(e => e.Description)));
+            return;
+        }
+
+        log.LogInformation("Admin {Email} criado pelo seed.", email);
+    }
+
+    if (!await users.IsInRoleAsync(user, Roles.SuperAdmin))
+    {
+        await users.AddToRoleAsync(user, Roles.SuperAdmin);
+        log.LogInformation("Admin {Email} promovido a {Papel}.", email, Roles.SuperAdmin);
+    }
 }
 
 public partial class Program;
