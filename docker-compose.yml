@@ -38,6 +38,17 @@ services:
       Efi__CertificatePassword: "${EFI_CERT_PASSWORD:-}"
       Efi__PixKey: "${EFI_PIX_KEY:-}"
       Efi__WebhookSecret: "${EFI_WEBHOOK_SECRET:-}"
+      Asaas__Sandbox: "true"
+      Asaas__ApiKey: "${ASAAS_API_KEY:-}"
+      Asaas__WebhookSecret: "${ASAAS_WEBHOOK_SECRET:-}"
+
+      #  Credencial da Cora em base64 (base64 -w0 certificate.pem, idem
+      #  para private-key.key).  ClientId sai do CN do certificado.
+      Cora__Sandbox: "${CORA_SANDBOX:-true}"
+      Cora__ClientId: "${CORA_CLIENT_ID:-}"
+      Cora__CertificatePem: "${CORA_CERTIFICATE_PEM:-}"
+      Cora__PrivateKeyPem: "${CORA_PRIVATE_KEY_PEM:-}"
+      Cora__WebhookSecret: "${CORA_WEBHOOK_SECRET:-}"
     ports:
       - "8080:8080"
 
