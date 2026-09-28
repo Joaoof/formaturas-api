@@ -10,8 +10,13 @@ public static class PublicEndpoints
     /*  O formando não tem e-mail no cadastro obrigatório, então o acesso
         dele é derivado do CPF.  Login e senha iniciais são o próprio CPF —
         é o que o formulário de entrada pede, e o que a listagem de
-        "meus contratos" usa para casar usuário com aluno.  */
-    public const string DominioFormando = "formando.jmformaturas.app";
+        "meus contratos" usa para casar usuário com aluno.
+
+        O domínio é `formandos.local` porque é o que o front usa para montar
+        o e-mail no login e o que o resto da API já documentava.  Divergir
+        aqui cria usuário com um endereço contra o qual ninguém autentica —
+        a adesão termina "com sucesso" e o formando não entra.  */
+    public const string DominioFormando = "formandos.local";
 
     public static string EmailDoFormando(string cpf) => $"{cpf}@{DominioFormando}";
 
