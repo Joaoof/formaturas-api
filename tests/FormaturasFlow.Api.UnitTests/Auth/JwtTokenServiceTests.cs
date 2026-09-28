@@ -25,7 +25,12 @@ public class JwtTokenServiceTests
 
         var sp = services.BuildServiceProvider();
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
-        return (new JwtTokenService(Options.Create(opt), users), sp);
+
+        /*  O serviço passou a persistir refresh token, então precisa do
+            contexto; o banco em memória basta para o que este teste
+            verifica, que é o conteúdo do access token.  */
+        var db = sp.GetRequiredService<AppDbContext>();
+        return (new JwtTokenService(Options.Create(opt), users, db), sp);
     }
 
     private static JwtOptions ValidOpts() => new()
