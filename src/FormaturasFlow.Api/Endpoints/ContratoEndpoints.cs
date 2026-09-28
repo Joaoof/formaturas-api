@@ -79,8 +79,101 @@ public static class ContratoEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapPost("/{id:guid}/assinar", AssinarAsync)
+            .WithSummary("Assina eletronicamente o contrato")
+            .WithDescription("""
+                Grava a rubrica desenhada pelo contratante junto com a trilha
+                de auditoria: data e hora, IP, dispositivo e o hash SHA-256 do
+                texto exato que estava na tela.
+
+                O hash é o que dá valor de prova ao conjunto — sem ele, editar
+                as cláusulas depois deixaria a assinatura cobrindo um texto que
+                o formando nunca leu.  Depois de assinado, o texto do contrato
+                fica bloqueado para edição.
+
+                Recusa reassinatura (409) para não substituir em silêncio a
+                prova de um aceite que já ocorreu.
+                """)
+            .Produces<AssinaturaResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
+        group.MapGet("/{id:guid}/assinatura", ConsultarAssinaturaAsync)
+            .WithSummary("Situação da assinatura e verificação de integridade")
+            .WithDescription("""
+                Devolve a trilha de auditoria e recalcula o hash do texto atual
+                para dizer se o documento continua íntegro desde o aceite.
+                `textoIntacto: false` significa que as cláusulas mudaram depois
+                de assinadas.
+                """)
+            .Produces<AssinaturaResponse>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
+
+    public record AssinarRequest(string Imagem, string? Nome, string? Cpf);
+
+    public record AssinaturaResponse(
+        Guid             ContratoId,
+        bool             Assinado,
+        bool             TextoIntacto,
+        string?          AssinanteNome,
+        string?          AssinanteCpf,
+        DateTimeOffset?  AssinadoEm,
+        string?          AssinadoIp,
+        string?          AssinadoUserAgent,
+        string?          HashDocumento,
+        string?          AssinaturaImagem);
+
+    private static async Task<IResult> AssinarAsync(
+        Guid id,
+        AssinarRequest req,
+        HttpContext ctx,
+        AppDbContext db,
+        CancellationToken ct)
+    {
+        var contrato = await db.Contratos.FirstOrDefaultAsync(c => c.Id == id, ct)
+            ?? throw new RecursoNaoEncontradoException("Contrato", id);
+
+        AssinaturaContrato.Aplicar(
+            contrato,
+            req.Imagem,
+            req.Nome,
+            req.Cpf,
+            IpDe(ctx),
+            ctx.Request.Headers.UserAgent.ToString());
+
+        await db.SaveChangesAsync(ct);
+
+        return Results.Ok(Montar(contrato));
+    }
+
+    private static async Task<IResult> ConsultarAssinaturaAsync(Guid id, AppDbContext db, CancellationToken ct)
+    {
+        var contrato = await db.Contratos.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct)
+            ?? throw new RecursoNaoEncontradoException("Contrato", id);
+
+        return Results.Ok(Montar(contrato));
+    }
+
+    private static AssinaturaResponse Montar(Contrato c) => new(
+        ContratoId: c.Id,
+        Assinado: c.Assinado,
+        TextoIntacto: AssinaturaContrato.TextoIntacto(c),
+        AssinanteNome: c.AssinanteNome,
+        AssinanteCpf: c.AssinanteCpf,
+        AssinadoEm: c.AssinadoEm,
+        AssinadoIp: c.AssinadoIp,
+        AssinadoUserAgent: c.AssinadoUserAgent,
+        HashDocumento: c.AssinaturaHashDocumento,
+        AssinaturaImagem: c.AssinaturaImagem);
+
+    /*  ForwardedHeaders já está ligado no Program, então RemoteIpAddress é o
+        IP real do formando e não o do proxy.  */
+    private static string? IpDe(HttpContext ctx) =>
+        ctx.Connection.RemoteIpAddress?.ToString();
 
     private static async Task<IResult> CreateWithParcelasAsync(
         [FromBody] ContratoCreate req, AppDbContext db)
@@ -148,7 +241,21 @@ public static class ContratoEndpoints
         c.DiaVencimento = req.DiaVencimento;
         if (req.AutorizaImagem.HasValue) c.AutorizaImagem = req.AutorizaImagem.Value;
         c.FormaPagamento = req.FormaPagamento;
-        if (req.TextoContrato is not null) c.TextoContrato = req.TextoContrato;
+
+        /*  Texto de contrato assinado é imutável.  Deixar editar tornaria a
+            assinatura inútil como prova: o hash guardado no aceite deixaria
+            de bater e, pior, alguém poderia alterar cláusulas de um documento
+            que o formando já tinha aceitado.  Para mudar o teor, o caminho é
+            emitir um novo contrato.  */
+        if (req.TextoContrato is not null && req.TextoContrato != c.TextoContrato)
+        {
+            if (c.Assinado)
+                throw new ConflitoException("CONTRATO_ASSINADO_IMUTAVEL",
+                    $"O texto deste contrato não pode ser alterado: ele foi assinado em {c.AssinadoEm:dd/MM/yyyy HH:mm}.");
+
+            c.TextoContrato = req.TextoContrato;
+        }
+
         c.AtualizadoEm = DateTimeOffset.UtcNow;
 
         if (req.RecalcularParcelas == true && req.PrimeiroVencimento.HasValue)

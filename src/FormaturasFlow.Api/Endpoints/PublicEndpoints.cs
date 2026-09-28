@@ -21,9 +21,16 @@ public static class PublicEndpoints
         Guid TurmaId, DadosPessoais DadosPessoais, string Pacote,
         decimal ValorTotal, int NumParcelas, int DiaVencimento,
         bool AutorizaImagem, string TextoContratoCompleto,
-        List<ParcelaAdesao> Parcelas);
+        List<ParcelaAdesao> Parcelas,
 
-    public record AdesaoResponse(Guid AlunoId, string Nome, string Cpf, string LoginUsuario);
+        /*  Rubrica desenhada pelo formando (PNG em data URL).  Opcional no
+            contrato para não quebrar quem já integra, mas é o que transforma
+            o aceite num documento com valor de prova.  */
+        string? AssinaturaImagem = null);
+
+    public record AdesaoResponse(
+        Guid AlunoId, string Nome, string Cpf, string LoginUsuario,
+        Guid ContratoId, bool Assinado);
 
     public static IEndpointRouteBuilder MapPublicEndpoints(this IEndpointRouteBuilder app)
     {
@@ -52,7 +59,7 @@ public static class PublicEndpoints
 
     private static string ApenasDigitos(string s) => new(s.Where(char.IsDigit).ToArray());
 
-    private static async Task<IResult> AdesaoAsync(AdesaoRequest req, AppDbContext db)
+    private static async Task<IResult> AdesaoAsync(AdesaoRequest req, HttpContext ctx, AppDbContext db)
     {
         var cpf = ApenasDigitos(req.DadosPessoais.Cpf);
         if (cpf.Length != 11) throw new DadosInvalidosException("CPF_INVALIDO", "CPF invalido.");
@@ -103,6 +110,18 @@ public static class PublicEndpoints
         };
         db.Contratos.Add(contrato);
 
+        /*  A assinatura entra na MESMA transação da adesão.  Gravar o
+            contrato agora e assinar num segundo passo abriria a janela em
+            que o formando acha que assinou e o documento está sem rubrica.  */
+        if (!string.IsNullOrWhiteSpace(req.AssinaturaImagem))
+            AssinaturaContrato.Aplicar(
+                contrato,
+                req.AssinaturaImagem,
+                aluno.NomeCompleto,
+                cpf,
+                ctx.Connection.RemoteIpAddress?.ToString(),
+                ctx.Request.Headers.UserAgent.ToString());
+
         foreach (var p in req.Parcelas)
         {
             db.Parcelas.Add(new Parcela
@@ -120,6 +139,8 @@ public static class PublicEndpoints
         await db.SaveChangesAsync();
         await tx.CommitAsync();
 
-        return Results.Ok(new AdesaoResponse(aluno.Id, aluno.NomeCompleto, cpf, aluno.LoginUsuario ?? cpf));
+        return Results.Ok(new AdesaoResponse(
+            aluno.Id, aluno.NomeCompleto, cpf, aluno.LoginUsuario ?? cpf,
+            contrato.Id, contrato.Assinado));
     }
 }
