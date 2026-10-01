@@ -48,6 +48,36 @@ public static class AuthEndpoints
             .Produces<ServiceTokenResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status403Forbidden);
 
+        group.MapPost("/trocar-senha", TrocarSenhaAsync)
+            .RequireAuthorization()
+            .WithSummary("Troca a própria senha")
+            .WithDescription("""
+                Não havia como ninguém trocar de senha neste sistema, e isso
+                pesa mais do que parece: o formando entra com o CPF como
+                senha, e o CPF não é segredo — circula em matrícula, lista de
+                presença e grupo de turma. Sem troca, qualquer um que soubesse
+                o CPF entrava na área dele e via contrato, endereço e telefone.
+
+                Exige a senha atual, para um token roubado não servir para
+                tomar a conta de forma permanente.
+                """)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+        group.MapPost("/admin/redefinir-senha", RedefinirSenhaAsync)
+            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin))
+            .WithSummary("Redefine a senha de outro usuário")
+            .WithDescription("""
+                Requer `super_admin`. Para o caso real de quem esqueceu a
+                senha: sem isto, a única saída era alterar o banco à mão.
+                Não pede a senha antiga, porque quem esqueceu não a tem.
+                """)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapPost("/admin/promote", PromoteRoleAsync)
             .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin))
             .WithSummary("Atribui um papel a um usuario existente")
@@ -60,6 +90,14 @@ public static class AuthEndpoints
     }
 
     public record PromoteRequest([Required, EmailAddress] string Email, [Required] string Role);
+
+    public record TrocarSenhaRequest(
+        [Required] string SenhaAtual,
+        [Required, MinLength(8)] string NovaSenha);
+
+    public record RedefinirSenhaRequest(
+        [Required, EmailAddress] string Email,
+        [Required, MinLength(8)] string NovaSenha);
 
     public record MeResponse(Guid Id, string Email, string NomeCompleto, IEnumerable<string> Roles);
 
@@ -170,6 +208,59 @@ public static class AuthEndpoints
 
         var roles = await users.GetRolesAsync(user);
         return Results.Ok(new MeResponse(user.Id, user.Email!, user.NomeCompleto, roles));
+    }
+
+    private static async Task<IResult> TrocarSenhaAsync(
+        [FromBody] TrocarSenhaRequest req,
+        HttpContext ctx,
+        UserManager<ApplicationUser> users)
+    {
+        var user = await users.GetUserAsync(ctx.User);
+        if (user is null) return Results.Unauthorized();
+
+        var r = await users.ChangePasswordAsync(user, req.SenhaAtual, req.NovaSenha);
+
+        /*  A mensagem distingue senha atual errada de nova senha fraca; o
+            Identity devolve os dois no mesmo formato, e sem separar o usuário
+            fica tentando adivinhar qual dos dois é o problema.  */
+        return r.Succeeded
+            ? Results.NoContent()
+            : Results.BadRequest(new
+            {
+                codigo = r.Errors.Any(e => e.Code == "PasswordMismatch")
+                    ? "SENHA_ATUAL_INCORRETA"
+                    : "SENHA_NOVA_INVALIDA",
+                erros = r.Errors.Select(e => e.Description).ToArray()
+            });
+    }
+
+    private static async Task<IResult> RedefinirSenhaAsync(
+        [FromBody] RedefinirSenhaRequest req,
+        UserManager<ApplicationUser> users)
+    {
+        var user = await users.FindByEmailAsync(req.Email);
+        if (user is null) return Results.NotFound(new { erro = "Usuario nao encontrado." });
+
+        /*  Remover e recriar a senha em vez de usar token de reset: a
+            aplicação não registra os provedores de token do Identity, e
+            GeneratePasswordResetTokenAsync lançaria aqui.  */
+        var remover = await users.RemovePasswordAsync(user);
+        if (!remover.Succeeded)
+            return Results.BadRequest(new
+            {
+                codigo = "SENHA_NAO_REMOVIDA",
+                erros = remover.Errors.Select(e => e.Description).ToArray()
+            });
+
+        var definir = await users.AddPasswordAsync(user, req.NovaSenha);
+
+        return definir.Succeeded
+            ? Results.NoContent()
+            : Results.BadRequest(new
+            {
+                codigo = "SENHA_NOVA_INVALIDA",
+                erros = definir.Errors.Select(e => e.Description).ToArray()
+            });
     }
 
     private static async Task<IResult> PromoteRoleAsync(
