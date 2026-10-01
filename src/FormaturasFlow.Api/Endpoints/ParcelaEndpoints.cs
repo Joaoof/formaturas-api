@@ -1,3 +1,4 @@
+using FormaturasFlow.Api.Payments;
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Domain;
 using Microsoft.AspNetCore.Mvc;
@@ -22,11 +23,21 @@ public static class ParcelaEndpoints
     {
         var group = app.MapGroup("/parcelas").WithTags("Parcelas").RequireAuthorization();
 
-        group.MapGet("/", async (AppDbContext db, [FromQuery] string? status) =>
+        group.MapGet("/", async (HttpContext ctx, AppDbContext db, [FromQuery] string? status) =>
         {
             var q = db.Parcelas.AsNoTracking();
             if (Enum.TryParse<StatusParcela>(status, ignoreCase: true, out var s))
                 q = q.Where(p => p.Status == s);
+
+            /*  Formando só vê as parcelas dos próprios contratos: o que sai
+                daqui é a situação financeira de cada um.  */
+            if (!DonoDaParcela.EhEquipe(ctx.User))
+            {
+                var meu = await DonoDaParcela.AlunoDoTokenAsync(ctx.User, db);
+                if (meu is null) return new List<Parcela>();
+                q = q.Where(p => p.Contrato!.AlunoId == meu.Id);
+            }
+
             return await q.OrderBy(p => p.Vencimento).ToListAsync();
         })
             .WithSummary("Lista todas as parcelas ordenadas por vencimento")

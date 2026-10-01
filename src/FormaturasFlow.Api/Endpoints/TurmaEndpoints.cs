@@ -1,3 +1,4 @@
+using FormaturasFlow.Api.Payments;
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Domain;
 using Microsoft.AspNetCore.Mvc;
@@ -92,9 +93,21 @@ public static class TurmaEndpoints
         return app;
     }
 
-    private static async Task<IResult> ListAsync(AppDbContext db)
+    private static async Task<IResult> ListAsync(HttpContext ctx, AppDbContext db)
     {
-        var list = await db.Turmas
+        var q = db.Turmas.AsQueryable();
+
+        /*  Formando vê apenas a própria turma.  A lista completa expõe o
+            carteira de clientes da empresa para qualquer conta criada no
+            /auth/register, que é público.  */
+        if (!DonoDaParcela.EhEquipe(ctx.User))
+        {
+            var meu = await DonoDaParcela.AlunoDoTokenAsync(ctx.User, db);
+            if (meu is null) return Results.Ok(Array.Empty<TurmaDto>());
+            q = q.Where(t => t.Id == meu.TurmaId);
+        }
+
+        var list = await q
             .AsNoTracking()
             .OrderByDescending(t => t.CriadaEm)
             .Select(t => new TurmaDto(

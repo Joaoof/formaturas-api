@@ -1,3 +1,4 @@
+using FormaturasFlow.Api.Payments;
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Domain;
 using Microsoft.AspNetCore.Mvc;
@@ -37,11 +38,21 @@ public static class ContratoEndpoints
     {
         var group = app.MapGroup("/contratos").WithTags("Contratos").RequireAuthorization();
 
-        group.MapGet("/", async (AppDbContext db, [FromQuery] Guid? alunoId, [FromQuery] Guid? turmaId) =>
+        group.MapGet("/", async (HttpContext ctx, AppDbContext db, [FromQuery] Guid? alunoId, [FromQuery] Guid? turmaId) =>
         {
             var q = db.Contratos.Include(c => c.Parcelas).AsNoTracking().AsQueryable();
             if (alunoId.HasValue) q = q.Where(c => c.AlunoId == alunoId.Value);
             if (turmaId.HasValue) q = q.Where(c => c.Aluno!.TurmaId == turmaId.Value);
+
+            /*  Formando só vê o próprio contrato.  O filtro por query não
+                servia de proteção: era só trocar o alunoId na URL.  */
+            if (!DonoDaParcela.EhEquipe(ctx.User))
+            {
+                var meu = await DonoDaParcela.AlunoDoTokenAsync(ctx.User, db);
+                if (meu is null) return new List<Contrato>();
+                q = q.Where(c => c.AlunoId == meu.Id);
+            }
+
             return await q.ToListAsync();
         })
             .WithSummary("Lista contratos (opcionalmente filtrados por alunoId ou turmaId)")

@@ -1,3 +1,4 @@
+using FormaturasFlow.Api.Payments;
 using FormaturasFlow.Api.Auth;
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Domain;
@@ -50,7 +51,12 @@ public static class AlunoEndpoints
 
         group.MapGet("/", ListAsync)
             .WithSummary("Lista alunos")
-            .WithDescription("Aceita filtro opcional `?turmaId=<guid>` para pegar apenas alunos de uma turma.")
+            .WithDescription("""
+                Aceita filtro opcional `?turmaId=<guid>`.
+                Formando vê apenas o próprio cadastro: a listagem completa é
+                restrita à equipe, porque o que sai daqui é dado pessoal
+                (nome, CPF, contato) de todos os formandos.
+                """)
             .Produces<AlunoDto[]>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized);
 
@@ -140,9 +146,26 @@ public static class AlunoEndpoints
         return Results.Ok(alunos);
     }
 
-    private static async Task<IResult> ListAsync(AppDbContext db, [FromQuery] Guid? turmaId = null, [FromQuery] string? status = null)
+    private static async Task<IResult> ListAsync(
+        HttpContext ctx,
+        AppDbContext db,
+        [FromQuery] Guid? turmaId = null,
+        [FromQuery] string? status = null)
     {
         var q = db.Alunos.AsNoTracking();
+
+        /*  Quem não é equipe só enxerga o próprio cadastro.
+
+            Antes bastava estar autenticado, e o /auth/register é público:
+            qualquer pessoa da internet criava uma conta e lia nome, CPF, RG,
+            endereço e telefone de todos os formandos.  */
+        if (!DonoDaParcela.EhEquipe(ctx.User))
+        {
+            var meu = await DonoDaParcela.AlunoDoTokenAsync(ctx.User, db);
+            if (meu is null) return Results.Ok(Array.Empty<AlunoDto>());
+            q = q.Where(a => a.Id == meu.Id);
+        }
+
         if (turmaId.HasValue) q = q.Where(a => a.TurmaId == turmaId.Value);
         if (Enum.TryParse<StatusAluno>(status, ignoreCase: true, out var s))
             q = q.Where(a => a.Status == s);
