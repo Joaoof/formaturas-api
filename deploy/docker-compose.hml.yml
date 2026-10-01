@@ -76,8 +76,14 @@ services:
       Asaas__WebhookSecret: ${ASAAS_WEBHOOK_SECRET:-hml-webhook-secret}
       Cora__Sandbox: "true"
       Cora__ClientId: ${CORA_CLIENT_ID:-}
+      #  A Cora entrega a credencial como par PEM (certificate.pem +
+      #  private-key.key); em base64 porque variavel multi-linha quebra no
+      #  compose. As duas de baixo sao o formato PKCS#12, para quem converteu.
+      Cora__CertificatePem: ${CORA_CERTIFICATE_PEM:-}
+      Cora__PrivateKeyPem: ${CORA_PRIVATE_KEY_PEM:-}
       Cora__CertificateBase64: ${CORA_CERTIFICATE_BASE64:-}
       Cora__CertificatePassword: ${CORA_CERTIFICATE_PASSWORD:-}
+      Cora__WebhookUrlPublica: ${CORA_WEBHOOK_URL_PUBLICA:-}
       Cora__WebhookSecret: ${CORA_WEBHOOK_SECRET:-hml-webhook-secret}
 
       Cors__Origins__0: ${CORS_ORIGIN_0:-http://localhost:5173}
