@@ -53,7 +53,10 @@ public static class PaymentEndpoints
             .Produces(StatusCodes.Status400BadRequest);
 
         app.MapPost("/pagamentos/cobrancas", CriarCobrancaAsync)
-            .RequireAuthorization(p => p.RequireRole(Roles.SuperAdmin, Roles.Funcionario))
+            /*  Autenticado, não "só equipe": o painel do formando oferece
+                Pagar nas parcelas dele.  Quem restringe é DonoDaParcela, por
+                posse — formando emite para si, equipe para qualquer um.  */
+            .RequireAuthorization()
             .WithTags("Pagamentos")
             .WithSummary("Emite cobrança pelo PSP do domínio")
             .WithDescription("""
@@ -61,6 +64,9 @@ public static class PaymentEndpoints
                 `tipoProjeto`. Casamento → Asaas, Formatura → Cora.
                 Cruzamento indevido (ex.: Casamento + Pix) retorna 422 com
                 `codigo` e `metodosSuportados`. Falha do provedor retorna 502.
+                O formando pode emitir a cobrança da PRÓPRIA parcela, e nesse
+                caso `parcelaId` é obrigatório — é o que permite conferir a
+                posse. Parcela de outro formando devolve 403.
                 Informe `parcelaId` para vincular a cobrança à parcela: é o
                 que permite ao webhook do PSP dar baixa depois.
                 """)
@@ -91,12 +97,17 @@ public static class PaymentEndpoints
 
     private static async Task<IResult> CriarCobrancaAsync(
         CobrancaRoteadaRequest req,
+        HttpContext ctx,
         IPaymentRouter router,
         AppDbContext db,
         ILoggerFactory logs,
         CancellationToken ct)
     {
         var log = logs.CreateLogger("Pagamentos.Cobrancas");
+
+        /*  Posse antes de tudo: nenhuma validação de payload deve revelar
+            algo sobre parcela que não é de quem pediu.  */
+        await DonoDaParcela.GarantirPodeEmitirAsync(ctx.User, db, req.ParcelaId, ct);
 
         if (!Enum.TryParse<TipoProjeto>(req.TipoProjeto, ignoreCase: true, out var projeto))
             return Results.BadRequest(new
