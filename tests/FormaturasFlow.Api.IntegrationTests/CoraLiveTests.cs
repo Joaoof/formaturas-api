@@ -49,6 +49,105 @@ public class CoraLiveTests
         return (new CoraPaymentGateway(http, opcoes, tokens, NullLogger<CoraPaymentGateway>.Instance), credenciais);
     }
 
+    private static CoraEndpointsClient MontarEndpoints()
+    {
+        var opcoes = Options.Create(new CoraOptions
+        {
+            Sandbox = true,
+            CertificatePemPath = CertPath!,
+            PrivateKeyPemPath = KeyPath!
+        });
+
+        var credenciais = new CoraCredentials(opcoes);
+        var http = new HttpClient(new CoraHttpHandler(credenciais));
+        var tokens = new CoraTokenProvider(
+            new FabricaFixa(http), opcoes, credenciais, NullLogger<CoraTokenProvider>.Instance);
+
+        return new CoraEndpointsClient(http, opcoes, tokens, NullLogger<CoraEndpointsClient>.Instance);
+    }
+
+    /*  Ciclo de vida do endpoint de notificação contra a Cora de verdade.
+
+        É o cadastro que faz o aviso de pagamento chegar; sem ele o boleto é
+        pago e o sistema nunca sabe.  O teste cria, confere na listagem e
+        REMOVE no final, para não deixar entulho apontando para lugar nenhum
+        na conta de stage.  */
+    [SkippableFact]
+    public async Task Cadastra_Lista_E_Remove_O_Endpoint_De_Notificacao()
+    {
+        Skip.IfNot(Configurado, MotivoSkip);
+
+        var cora = MontarEndpoints();
+        var url = $"https://exemplo-teste-{Guid.NewGuid():N}.invalid/webhook?secret=teste";
+
+        var criado = await cora.CriarAsync(url, "invoice", "paid");
+
+        try
+        {
+            criado.Id.Should().StartWith("end_");
+            criado.Resource.Should().Be("invoice");
+            criado.Trigger.Should().Be("paid");
+            criado.Active.Should().BeTrue();
+
+            var lista = await cora.ListarAsync();
+            lista.Should().Contain(e => e.Id == criado.Id);
+        }
+        finally
+        {
+            await cora.RemoverAsync(criado.Id);
+        }
+
+        (await cora.ListarAsync()).Should().NotContain(e => e.Id == criado.Id);
+    }
+
+    /*  `invoice.*` é o que queremos em produção: assinar todos os gatilhos de
+        fatura.  Marcar demais é seguro porque o sistema reconsulta a Cora
+        antes de baixar qualquer parcela.  */
+    [SkippableFact]
+    public async Task Aceita_Assinar_Todos_Os_Gatilhos_De_Fatura()
+    {
+        Skip.IfNot(Configurado, MotivoSkip);
+
+        var cora = MontarEndpoints();
+        var url = $"https://exemplo-teste-{Guid.NewGuid():N}.invalid/webhook?secret=teste";
+
+        var criado = await cora.CriarAsync(url, "invoice", "*", incluirRecurso: true);
+
+        try
+        {
+            criado.Trigger.Should().Be("*");
+            criado.IncludeResource.Should().BeTrue();
+        }
+        finally
+        {
+            await cora.RemoverAsync(criado.Id);
+        }
+    }
+
+    [SkippableFact]
+    public async Task Recusa_Url_Que_Nao_Seja_Https()
+    {
+        Skip.IfNot(Configurado, MotivoSkip);
+
+        var cora = MontarEndpoints();
+
+        var acao = async () => await cora.CriarAsync("http://sem-tls.exemplo/webhook");
+
+        await acao.Should().ThrowAsync<PaymentGatewayException>();
+    }
+
+    [SkippableFact]
+    public async Task Recusa_Recurso_Fora_Do_Catalogo_Da_Cora()
+    {
+        Skip.IfNot(Configurado, MotivoSkip);
+
+        var cora = MontarEndpoints();
+
+        var acao = async () => await cora.CriarAsync("https://exemplo.invalid/webhook", "recurso_inexistente");
+
+        await acao.Should().ThrowAsync<PaymentGatewayException>();
+    }
+
     private sealed class FabricaFixa(HttpClient http) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => http;

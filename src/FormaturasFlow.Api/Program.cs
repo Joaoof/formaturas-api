@@ -105,6 +105,10 @@ builder.Services.AddHttpClient(CoraTokenProvider.HttpClientName)
 builder.Services.AddHttpClient<CoraPaymentGateway>()
     .ConfigurePrimaryHttpMessageHandler<FormaturasFlow.Api.Payments.CoraHttpHandler>();
 
+/*  Cadastro dos endpoints de notificação: mesmo canal mTLS da emissão.  */
+builder.Services.AddHttpClient<CoraEndpointsClient>()
+    .ConfigurePrimaryHttpMessageHandler<FormaturasFlow.Api.Payments.CoraHttpHandler>();
+
 builder.Services.AddTransient<IPaymentGateway>(sp => sp.GetRequiredService<AsaasPaymentGateway>());
 builder.Services.AddTransient<IPaymentGateway>(sp => sp.GetRequiredService<CoraPaymentGateway>());
 builder.Services.AddTransient<IConsultaCobranca>(sp => sp.GetRequiredService<CoraPaymentGateway>());
@@ -133,16 +137,37 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 /*  O webhook da Cora eh anonimo e cada POST aceito custa uma ida a Cora
-    (token + consulta mTLS). A janela limita o estrago de quem descobrir a
-    URL, sem atrapalhar o volume real de notificacoes.  */
+    (token + consulta mTLS), entao precisa de teto.
+
+    A cota eh SEPARADA por quem apresenta o segredo.  Uma janela unica para
+    todo mundo teria o efeito perverso de deixar um atacante encher o balde e
+    a notificacao legitima da Cora levar 429 — ou seja, o pagamento entraria
+    e a parcela nunca seria baixada.  Quem nao tem o segredo nao alcanca o
+    balde de quem tem.
+
+    Particionar por IP nao serviria: a API roda atras de proxy, entao todo
+    request chega com o IP do proxy.  */
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    o.AddFixedWindowLimiter(CoraWebhookEndpoints.RateLimitPolicy, w =>
+
+    o.AddPolicy(CoraWebhookEndpoints.RateLimitPolicy, ctx =>
     {
-        w.PermitLimit = 120;
-        w.Window = TimeSpan.FromMinutes(1);
-        w.QueueLimit = 0;
+        var segredo = ctx.RequestServices
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<FormaturasFlow.Api.Payments.CoraOptions>>()
+            .Value.WebhookSecret;
+
+        var autorizado = !string.IsNullOrWhiteSpace(segredo)
+            && CoraWebhookEndpoints.SegredoConfere(ctx, segredo);
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            autorizado ? "cora-autorizado" : "cora-anonimo",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = autorizado ? 600 : 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
     });
 });
 
@@ -212,6 +237,7 @@ v1.MapColaboradorEndpoints();
 v1.MapPublicEndpoints();
 v1.MapPaymentEndpoints();
 v1.MapCoraWebhookEndpoints();
+v1.MapCoraAdminEndpoints();
 
 app.Run();
 

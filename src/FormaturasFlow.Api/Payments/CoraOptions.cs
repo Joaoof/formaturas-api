@@ -26,6 +26,13 @@ public class CoraOptions
 
     public string WebhookSecret { get; set; } = string.Empty;
 
+    /*  Endereço público desta API, usado para montar a URL do aviso ao
+        cadastrar o endpoint na Cora (ex. "https://api.exemplo.com.br").
+        Fica aqui porque o servidor não tem como descobrir sozinho por qual
+        nome ele é alcançado de fora — atrás de proxy, o Host da requisição
+        administrativa não é necessariamente o que a Cora deve chamar.  */
+    public string WebhookUrlPublica { get; set; } = string.Empty;
+
     /*  A Cora usa mTLS: o mesmo host atende token e cobranças, e o
         certificado vai no CoraHttpHandler.  */
     public string BaseUrl => Sandbox

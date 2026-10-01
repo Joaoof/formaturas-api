@@ -54,7 +54,8 @@ Caminho em disco é o formato preferido:
   "ClientId": "",
   "CertificatePemPath": "certs/cora/stage/certificate.pem",
   "PrivateKeyPemPath": "certs/cora/stage/private-key.key",
-  "WebhookSecret": "<um segredo forte>"
+  "WebhookSecret": "<um segredo forte>",
+  "WebhookUrlPublica": "https://api.exemplo.com.br"
 }
 ```
 
@@ -139,21 +140,65 @@ para reconciliar manualmente quando o webhook não chegou.
 ### Webhook
 
 ```http
-POST /api/v1/pagamentos/webhooks/cora
-X-Webhook-Secret: <o mesmo valor de Cora:WebhookSecret>
+POST /api/v1/pagamentos/webhooks/cora?secret=<Cora:WebhookSecret>
 ```
 
-Se o painel da Cora não deixar configurar cabeçalho, use a URL com o segredo na
-query, que também é aceita:
+Anônimo por necessidade — quem chama é a Cora, não um usuário logado.
 
+**O segredo vai na query, e não é escolha.** Na Integração Direta a Cora não
+tem tela de webhook: o endereço é cadastrado por API, e esse cadastro aceita
+apenas `url`, `resource` e `trigger`. Não há como configurar cabeçalho, então a
+query é o único lugar onde o segredo cabe. O endpoint ainda aceita
+`X-Webhook-Secret` para quem chamar à mão, mas a Cora nunca vai usar.
+
+### Cadastrar o endpoint na Cora
+
+Sem este cadastro o boleto é pago e **o sistema nunca sabe**: a parcela fica
+pendente com o dinheiro já na conta. É o passo mais fácil de esquecer e o mais
+caro de descobrir tarde.
+
+Defina `Cora:WebhookUrlPublica` com o endereço público da API e chame:
+
+```http
+POST /api/v1/pagamentos/cora/endpoints
+Authorization: Bearer <jwt de super_admin>
 ```
-https://sua-api/api/v1/pagamentos/webhooks/cora?secret=<Cora:WebhookSecret>
+
+Com o corpo vazio ele monta a URL sozinho e já anexa o segredo. Por padrão
+assina `invoice.*`, todos os gatilhos de fatura. Marcar demais é seguro, porque
+o sistema reconsulta a Cora antes de dar qualquer parcela como paga; marcar de
+menos faz perder confirmação de pagamento.
+
+Para conferir para onde a Cora está entregando hoje:
+
+```http
+GET /api/v1/pagamentos/cora/endpoints
 ```
 
-Prefira o cabeçalho. A query costuma aparecer em log de acesso.
+**Lista vazia significa que ninguém será avisado de pagamento algum.** A URL
+vem sem a query, porque ela carrega o segredo.
 
-Anônimo por necessidade — quem chama é a Cora, não um usuário logado. Configure
-a URL no painel da Cora.
+Para remover um cadastro:
+
+```http
+DELETE /api/v1/pagamentos/cora/endpoints/{id}
+```
+
+Equivalente em curl, se precisar falar direto com a Cora (note o `matls-clients`
+no host e o `Idempotency-Key` em UUID, ambos obrigatórios):
+
+```bash
+curl https://matls-clients.api.cora.com.br/endpoints \
+  --cert certificate.pem --key private-key.key \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://sua-api/api/v1/pagamentos/webhooks/cora?secret=SEGREDO","resource":"invoice","trigger":"*"}'
+```
+
+Recursos aceitos: `invoice`, `transfer`, `payment`, `register`,
+`service_receipt` e `*`. Gatilhos de fatura: `drafted`, `created`, `paid`,
+`canceled`, `overdue` e `*`.
 
 É ele que **dá baixa na parcela**: encontra a parcela por `PspChargeId`, marca
 `Pago`, grava `ValorPago` e `DataPagamento`. O evento fica registrado em
@@ -165,8 +210,10 @@ parcial como quitado daria baixa numa parcela de R$ 1.000 que recebeu R$ 300. O
 valor recebido é reescrito a cada notificação, então um parcial seguido da
 quitação termina com o valor cheio gravado.
 
-Limitado a 120 requisições por minuto, porque cada POST aceito custa uma ida à
-Cora.
+A cota é separada por quem apresenta o segredo: 600 por minuto para quem
+apresenta, 30 para quem não. Uma janela única deixaria um atacante encher o
+balde e a notificação legítima da Cora levar 429 — o pagamento entraria e a
+parcela nunca seria baixada.
 
 ---
 
@@ -215,7 +262,8 @@ parcela como paga a partir de um POST forjado, já que ninguém de fora forja o
 canal mTLS; e quebrar a cada ajuste de payload do provedor, já que o envelope
 pouco importa.
 
-O `WebhookSecret` é **obrigatório**, no header `X-Webhook-Secret`, comparado em
+O `WebhookSecret` é **obrigatório**, na query `?secret=` (ou no header
+`X-Webhook-Secret` para chamadas manuais), comparado em
 tempo constante. Não é ele que garante a veracidade do pagamento — isso é papel
 da reconsulta. Ele existe porque o endpoint é anônimo e cada POST aceito dispara
 uma chamada autenticada à Cora: sem segredo, quem descobrisse a URL teria um
@@ -228,7 +276,7 @@ Respostas:
 | 200 | Processado, com o status da fatura |
 | 202 | Corpo sem id reconhecível, descartado de propósito para a Cora não reenviar para sempre |
 | 401 | Segredo ausente ou divergente, no cabeçalho e na query |
-| 429 | Acima de 120 requisições por minuto |
+| 429 | Acima da cota (600/min com segredo, 30/min sem) |
 | 503 | `Cora:WebhookSecret` não configurado — a Cora deve reenviar depois do ajuste |
 
 O 503 é deliberado. Responder 200 sem processar daria o evento por entregue e a
@@ -264,7 +312,9 @@ idempotência que impede cobrança duplicada.
 - [ ] `CertificatePemPath` / `PrivateKeyPemPath` apontando para o par de **produção**
 - [ ] `Sandbox: false`
 - [ ] `ClientId` vazio (vem do certificado)
-- [ ] `WebhookSecret` definido e a URL cadastrada no painel da Cora, com o header `X-Webhook-Secret`
+- [ ] `WebhookSecret` e `WebhookUrlPublica` definidos
+- [ ] Endpoint cadastrado na Cora via `POST /api/v1/pagamentos/cora/endpoints`
+- [ ] `GET /api/v1/pagamentos/cora/endpoints` devolvendo o cadastro (lista vazia = ninguém é avisado)
 - [ ] Parcela gravando `PspChargeId` na emissão — sem isso o webhook não acha o que baixar
 - [ ] Teste ao vivo rodado contra produção com **valor baixo** e cobrança cancelada depois
 - [ ] Vencimento do certificado anotado — ele expira em 1 ano:
