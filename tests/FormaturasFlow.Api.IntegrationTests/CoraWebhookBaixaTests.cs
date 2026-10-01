@@ -173,15 +173,55 @@ public class CoraWebhookBaixaTests(ApiFactory factory) : IAsyncLifetime
         var http = ComCoraRespondendo(_ => Fatura("PAID", valor));
 
         await http.SendAsync(Aviso());
-        var primeira = (await RecarregarAsync(parcelaId)).AtualizadaEm;
+        var depoisDaPrimeira = await RecarregarAsync(parcelaId);
+        var dataOriginal = depoisDaPrimeira.DataPagamento;
 
         var segunda = await http.SendAsync(Aviso());
 
         segunda.StatusCode.Should().Be(HttpStatusCode.OK);
 
+        /*  O que precisa ficar igual é o FATO do pagamento, não o carimbo de
+            atualização: reprocessar o mesmo aviso não pode dobrar o valor
+            recebido nem mover a data em que o formando pagou.
+
+            A asserção antiga olhava `AtualizadaEm`, que media a antiga
+            deduplicação por conteúdo — e essa deduplicação foi removida de
+            propósito, porque descartava transição legítima da fatura.  */
         var parcela = await RecarregarAsync(parcelaId);
+        parcela.Status.Should().Be(FormaturasFlow.Api.Domain.StatusParcela.Pago);
         parcela.ValorPago.Should().Be(valor);
-        parcela.AtualizadaEm.Should().Be(primeira);
+        parcela.DataPagamento.Should().Be(dataOriginal);
+    }
+
+    /*  A falha que motivou gravar antes de consultar: se a Cora estiver fora
+        do ar na hora do aviso, o evento não pode desaparecer.  */
+    [Fact]
+    public async Task Reconsulta_Que_Falha_Deixa_O_Evento_Guardado_Para_Reprocessar()
+    {
+        var (parcelaId, _) = await ArranjarParcelaVinculadaAsync();
+
+        var http = ComCoraRespondendo(_ => throw new FormaturasFlow.Api.Payments.PaymentGatewayException(
+            FormaturasFlow.Api.Payments.PaymentProvider.Cora, "Cora indisponivel"));
+
+        var resp = await http.SendAsync(Aviso());
+
+        resp.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+
+        await using var escopo = factory.Services.CreateAsyncScope();
+        var db = escopo.ServiceProvider.GetRequiredService<FormaturasFlow.Api.Data.AppDbContext>();
+
+        var evento = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+            .FirstOrDefaultAsync(db.WebhookEvents.Where(w => w.Provider == "cora"));
+
+        evento.Should().NotBeNull("o aviso tem de ficar registrado mesmo com a Cora fora do ar");
+        evento!.ProcessadoEm.Should().BeNull();
+        evento.Erro.Should().NotBeNullOrWhiteSpace();
+        evento.PayloadJson.Should().Contain(ChargeId);
+
+        /*  E a parcela NÃO pode ter sido tocada com base num aviso que não
+            foi confirmado.  */
+        (await RecarregarAsync(parcelaId)).Status
+            .Should().Be(FormaturasFlow.Api.Domain.StatusParcela.Pendente);
     }
 
     [Fact]

@@ -137,43 +137,103 @@ public static class CoraWebhookEndpoints
         if (cora is null)
             return Results.Problem("Consulta da Cora não registrada.", statusCode: StatusCodes.Status500InternalServerError);
 
-        var cobranca = await cora.ConsultarCobrancaAsync(chargeId, ct);
-        var resposta = Montar(cobranca);
+        /*  O aviso é GRAVADO ANTES de qualquer coisa que possa falhar.
 
-        await RegistrarAsync(db, corpo, resposta, log, ct);
+            A ordem inversa custava caro: a reconsulta vinha primeiro, e se a
+            Cora estivesse fora do ar, lenta, ou a credencial errada, a
+            exceção subia e o aviso desaparecia sem deixar rastro.  O
+            provedor reenvia por um tempo, mas se a indisponibilidade passar
+            da janela de retentativa, a confirmação do pagamento se perde em
+            silêncio — exatamente o estrago que este endpoint existe para
+            evitar.  Gravando primeiro, sempre dá para reprocessar depois.  */
+        var registro = await RegistrarChegadaAsync(db, corpo, chargeId, log, ct);
+
+        StatusCobrancaResponse resposta;
+        try
+        {
+            resposta = Montar(await cora.ConsultarCobrancaAsync(chargeId, ct));
+        }
+        catch (Exception ex)
+        {
+            /*  Fica gravado com o erro e sem `ProcessadoEm`: é assim que
+                alguém encontra depois o que precisa ser reprocessado, em vez
+                de descobrir pelo formando reclamando que pagou.  */
+            if (registro is not null)
+            {
+                registro.Erro = CoraPaymentGateway.Resumir(ex.Message);
+                await db.SaveChangesAsync(ct);
+            }
+
+            log.LogError(ex, "Webhook da Cora: reconsulta de {ChargeId} falhou; evento guardado para reprocessar.", chargeId);
+            throw;
+        }
+
+        await AplicarAsync(db, registro, resposta, log, ct);
 
         return Results.Ok(resposta);
     }
 
-    /*  Persistência do evento + baixa da parcela.
+    /*  Grava a chegada do aviso, SEMPRE, antes de qualquer coisa que possa
+        falhar.
 
-        A chave de deduplicação é `chargeId:status`, não o id do evento: a
-        Cora pode reenviar a mesma notificação, e o que não pode acontecer é
-        a mesma transição ser aplicada duas vezes.  Reenvio depois de uma
-        mudança real de status (OPEN → PAID) continua sendo processado.  */
-    private static async Task RegistrarAsync(
+        Cada entrega vira uma linha própria, sem deduplicar por conteúdo.
+        Tentei pela impressão do corpo e um teste mostrou o furo: se a Cora
+        usa o mesmo corpo para avisar transições diferentes da fatura — e eu
+        não conheço o formato real dela para apostar que não — um parcial
+        seguido da quitação seria descartado como "reentrega", e a parcela
+        terminaria com o valor errado gravado.
+
+        Perder a transição é muito pior que guardar linha repetida numa
+        tabela de auditoria.  A proteção contra aplicar duas vezes não vem
+        daqui: vem do estado da própria parcela, conferido em AplicarAsync.  */
+    private static async Task<WebhookEvent?> RegistrarChegadaAsync(
         AppDbContext db,
         JsonElement corpo,
+        string chargeId,
+        ILogger log,
+        CancellationToken ct)
+    {
+        var registro = new WebhookEvent
+        {
+            Provider = "cora",
+            EventId = $"{chargeId}:{Guid.NewGuid():N}",
+            EventType = "recebido",
+            PayloadJson = corpo.GetRawText()
+        };
+        db.WebhookEvents.Add(registro);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            /*  Não deveria acontecer, porque a chave carrega um GUID novo.
+                Se acontecer, o aviso ainda precisa ser processado — então
+                segue sem registro em vez de descartar um pagamento.  */
+            log.LogError(ex, "Webhook da Cora: falha ao registrar a chegada de {ChargeId}; segue sem auditoria.", chargeId);
+            db.ChangeTracker.Clear();
+            return null;
+        }
+
+        return registro;
+    }
+
+    /*  Baixa da parcela a partir do estado que a Cora confirmou.
+
+        Aplicar duas vezes é inofensivo de propósito: a quitação só acontece
+        se a parcela ainda NÃO estiver paga, e o valor recebido é reescrito
+        com o mesmo número.  Essa idempotência vem do estado da parcela, não
+        de uma tabela de controle — é o que mantém a baixa segura mesmo se
+        um reprocessamento manual repetir o evento.  */
+    private static async Task AplicarAsync(
+        AppDbContext db,
+        WebhookEvent? registro,
         StatusCobrancaResponse r,
         ILogger log,
         CancellationToken ct)
     {
-        var eventId = $"{r.ChargeId}:{r.Status}";
-
-        if (await db.WebhookEvents.AnyAsync(w => w.Provider == "cora" && w.EventId == eventId, ct))
-        {
-            log.LogInformation("Webhook da Cora duplicado para {ChargeId} ({Status}); nada a fazer.", r.ChargeId, r.Status);
-            return;
-        }
-
-        var registro = new WebhookEvent
-        {
-            Provider = "cora",
-            EventId = eventId,
-            EventType = r.Status,
-            PayloadJson = corpo.GetRawText()
-        };
-        db.WebhookEvents.Add(registro);
+        if (registro is not null) registro.EventType = r.Status;
 
         var parcela = await db.Parcelas.FirstOrDefaultAsync(p => p.PspChargeId == r.ChargeId, ct);
 
@@ -213,7 +273,7 @@ public static class CoraWebhookEndpoints
             }
         }
 
-        registro.ProcessadoEm = DateTimeOffset.UtcNow;
+        if (registro is not null) registro.ProcessadoEm = DateTimeOffset.UtcNow;
 
         try
         {
