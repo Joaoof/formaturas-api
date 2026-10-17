@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
+using FormaturasFlow.Api.Payments;
 
 namespace FormaturasFlow.Api.Cora;
 
@@ -27,7 +28,8 @@ public class CoraClient(HttpClient http, IOptions<CoraOptions> opt, ILogger<Cora
         string CustomerName,
         string CustomerDocument,
         string? CustomerEmail,
-        string Description);
+        string Description,
+        string ExternalReference);
 
     public record InvoiceCriada(
         string Id,
@@ -72,7 +74,11 @@ public class CoraClient(HttpClient http, IOptions<CoraOptions> opt, ILogger<Cora
     public async Task<InvoiceCriada> CriarInvoiceAsync(CriarInvoiceRequest r, CancellationToken ct = default)
     {
         var token = await GetAccessTokenAsync(ct);
-        var idempotencyKey = Guid.NewGuid().ToString("N");
+        /*  A Cora RECUSA (400) qualquer Idempotency-Key fora do formato UUID.
+            ToString("N") gerava 32 hex sem hifens → invalido.  UUIDv5
+            deterministico a partir da referencia externa: mesma parcela gera
+            o mesmo UUID, entao retry nao cria fatura duplicada no Cora.  */
+        var idempotencyKey = CoraPaymentGateway.ChaveIdempotencia(r.ExternalReference).ToString();
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{_opt.BaseUrl}/v2/invoices/");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

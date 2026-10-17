@@ -140,7 +140,8 @@ public class PagamentoService(
             CustomerName: aluno.NomeCompleto,
             CustomerDocument: aluno.Cpf ?? "00000000000",
             CustomerEmail: aluno.Email,
-            Description: descricao), ct);
+            Description: descricao,
+            ExternalReference: p.Id.ToString()), ct);
 
         p.PspProvider = "cora";
         p.PspChargeId = invoice.Id;
@@ -261,7 +262,8 @@ public class PagamentoService(
             CustomerName: c.ClienteNome,
             CustomerDocument: c.ClienteCpf ?? "00000000000",
             CustomerEmail: c.ClienteEmail,
-            Description: c.Descricao), ct);
+            Description: c.Descricao,
+            ExternalReference: c.ExternalReference), ct);
 
         c.PspProvider = "cora";
         c.PspChargeId = invoice.Id;
