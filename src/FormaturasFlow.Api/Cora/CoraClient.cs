@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -83,34 +84,37 @@ public class CoraClient(HttpClient http, IOptions<CoraOptions> opt, ILogger<Cora
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{_opt.BaseUrl}/v2/invoices/");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         req.Headers.Add("Idempotency-Key", idempotencyKey);
+        /*  Payload alinhado ao /v2/invoices atual da Cora: nomes em
+            snake_case (payment_terms, due_date, payment_forms), `type` em vez
+            de `rule`, `code` = referencia externa e SEM politica camelCase
+            (que renomeava payment_terms -> paymentTerms e a Cora rejeitava
+            com "paymentTerms must not be null").  */
+        var documento = OnlyDigits(r.CustomerDocument);
         req.Content = JsonContent.Create(new
         {
-            code = idempotencyKey,
+            code = r.ExternalReference,
             customer = new
             {
                 name = r.CustomerName,
                 email = r.CustomerEmail,
                 document = new
                 {
-                    identity = OnlyDigits(r.CustomerDocument),
-                    rule = "CPF"
+                    identity = documento,
+                    type     = documento.Length > 11 ? "CNPJ" : "CPF"
                 }
             },
             services = new[]
             {
                 new
                 {
-                    name = r.Description,
+                    name        = r.Description,
                     description = r.Description,
-                    amount = (long)(r.Value * 100)
+                    amount      = (long)Math.Round(r.Value * 100m, MidpointRounding.AwayFromZero)
                 }
             },
-            paymentTerms = new
-            {
-                dueDate = r.DueDate.ToString("yyyy-MM-dd")
-            },
-            paymentForms = new[] { r.Kind == InvoiceKind.PIX ? "PIX" : "BANK_SLIP" }
-        }, options: JsonOpts);
+            payment_terms = new { due_date = r.DueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
+            payment_forms = new[] { r.Kind == InvoiceKind.PIX ? "PIX" : "BANK_SLIP" }
+        });
 
         using var resp = await http.SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
