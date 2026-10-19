@@ -6,10 +6,21 @@ namespace FormaturasFlow.Api.Payments;
     que permite liberar Pix para Casamento amanhã — quando o negócio
     aprovar — mexendo em uma linha do composition root, sem recompilar
     regra nenhuma de use case.  */
-public sealed record PaymentRoutingPolicy(PaymentProvider Provider, IReadOnlySet<MetodoPagamento> Metodos)
+public sealed record PaymentRoutingPolicy(
+    PaymentProvider Provider,
+    IReadOnlySet<MetodoPagamento> Metodos,
+    IReadOnlyDictionary<MetodoPagamento, PaymentProvider>? ProviderPorMetodo = null)
 {
-    /*  Casamentos → Asaas (cartão + boleto).  Formaturas → Cora (boleto
-        + Pix).  Qualquer cruzamento fora daqui vira DomainException.  */
+    /*  Provider efetivo de um método: usa o override quando existir, senão o
+        provider primário do domínio.  É o que permite a Formatura ficar na
+        Cora (boleto/Pix) e ainda assim mandar o CARTÃO para o Asaas, que é
+        quem processa cartão.  */
+    public PaymentProvider ProviderDoMetodo(MetodoPagamento metodo) =>
+        ProviderPorMetodo is not null && ProviderPorMetodo.TryGetValue(metodo, out var p) ? p : Provider;
+
+    /*  Casamentos → Asaas (cartão + boleto).  Formaturas → Cora (boleto +
+        Pix) e cartão via Asaas.  Qualquer cruzamento fora daqui vira
+        DomainException.  */
     public static readonly IReadOnlyDictionary<TipoProjeto, PaymentRoutingPolicy> Padrao =
         new Dictionary<TipoProjeto, PaymentRoutingPolicy>
         {
@@ -17,6 +28,10 @@ public sealed record PaymentRoutingPolicy(PaymentProvider Provider, IReadOnlySet
                 new HashSet<MetodoPagamento> { MetodoPagamento.CartaoCredito, MetodoPagamento.Boleto }),
 
             [TipoProjeto.Formatura] = new(PaymentProvider.Cora,
-                new HashSet<MetodoPagamento> { MetodoPagamento.Boleto, MetodoPagamento.Pix })
+                new HashSet<MetodoPagamento> { MetodoPagamento.Boleto, MetodoPagamento.Pix, MetodoPagamento.CartaoCredito },
+                new Dictionary<MetodoPagamento, PaymentProvider>
+                {
+                    [MetodoPagamento.CartaoCredito] = PaymentProvider.Asaas
+                })
         };
 }

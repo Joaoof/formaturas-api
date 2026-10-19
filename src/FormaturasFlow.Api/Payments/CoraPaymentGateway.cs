@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 
 namespace FormaturasFlow.Api.Payments;
@@ -21,6 +22,14 @@ public sealed class CoraPaymentGateway(
 {
     private readonly CoraOptions _opt = opt.Value;
 
+    /*  Envio do payload: omite campos nulos (o bloco `notification` só vai
+        quando há e-mail) e mantém os nomes em snake_case — camelCase faria a
+        Cora rejeitar payment_terms.  */
+    private static readonly JsonSerializerOptions JsonEnvio = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
     /*  A Cora trabalha em centavos e o campo é int32.  */
     private const decimal ValorMaximo = int.MaxValue / 100m;
 
@@ -37,6 +46,23 @@ public sealed class CoraPaymentGateway(
         var centavos = Centavos(req.Valor);
         var token = await tokens.ObterAsync(ct);
         var documento = Digitos(req.Pagador.Documento);
+
+        /*  Notificação por e-mail: faz a Cora enviar o boleto/Pix ao e-mail do
+            pagador (lembrete antes do vencimento, no dia e aviso de pagamento).
+            Só incluímos quando há e-mail — JsonEnvio omite o nulo.  */
+        object? notification = string.IsNullOrWhiteSpace(req.Pagador.Email) ? null : new
+        {
+            name     = req.Pagador.Nome,
+            channels = new[]
+            {
+                new
+                {
+                    channel = "EMAIL",
+                    contact = req.Pagador.Email,
+                    rules   = new[] { "NOTIFY_TWO_DAYS_BEFORE_DUE_DATE", "NOTIFY_ON_DUE_DATE", "NOTIFY_WHEN_PAID" }
+                }
+            }
+        };
 
         var payload = new
         {
@@ -65,7 +91,8 @@ public sealed class CoraPaymentGateway(
                 não gregoriano, o formato "yyyy" renderiza outro ano e a
                 cobrança nasce com vencimento errado.  */
             payment_terms = new { due_date = req.Vencimento.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
-            payment_forms = new[] { PaymentForm(req.Metodo) }
+            payment_forms = new[] { PaymentForm(req.Metodo) },
+            notification
         };
 
         using var msg = new HttpRequestMessage(HttpMethod.Post, $"{_opt.BaseUrl}/v2/invoices");
@@ -77,7 +104,7 @@ public sealed class CoraPaymentGateway(
             reenviar a mesma parcela devolve a mesma fatura, sem cobrar duas
             vezes o formando.  */
         msg.Headers.Add("Idempotency-Key", ChaveIdempotencia(req.ReferenciaExterna).ToString());
-        msg.Content = JsonContent.Create(payload);
+        msg.Content = JsonContent.Create(payload, options: JsonEnvio);
 
         using var resp = await http.SendAsync(msg, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);

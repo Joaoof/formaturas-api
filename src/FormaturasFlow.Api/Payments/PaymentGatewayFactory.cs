@@ -38,9 +38,13 @@ public sealed class PaymentGatewayFactory : IPaymentRouter
         if (!politica.Metodos.Contains(metodo))
             throw new MetodoPagamentoNaoSuportadoException(projeto, metodo, MetodosSuportados(projeto));
 
-        if (!_gateways.TryGetValue(politica.Provider, out var gateway))
+        /*  Provider efetivo do método (ex.: cartão da Formatura vai ao Asaas,
+            mesmo o provider primário sendo a Cora).  */
+        var provider = politica.ProviderDoMetodo(metodo);
+
+        if (!_gateways.TryGetValue(provider, out var gateway))
             throw new InvalidOperationException(
-                $"Política de {projeto} exige {politica.Provider}, mas nenhum IPaymentGateway desse provider foi registrado.");
+                $"Política de {projeto} exige {provider} para {metodo}, mas nenhum IPaymentGateway desse provider foi registrado.");
 
         /*  Defesa em profundidade: a política pode ter liberado um método
             que o PSP não implementa.  Falhar aqui é melhor do que enviar
@@ -55,9 +59,10 @@ public sealed class PaymentGatewayFactory : IPaymentRouter
     public IPaymentGateway Resolver(TipoProjeto projeto, MetodoPagamento metodo, PaymentProvider providerExigido)
     {
         var politica = PoliticaDe(projeto);
+        var provider = politica.ProviderDoMetodo(metodo);
 
-        if (politica.Provider != providerExigido)
-            throw new ProviderNaoPermitidoException(projeto, providerExigido, politica.Provider);
+        if (provider != providerExigido)
+            throw new ProviderNaoPermitidoException(projeto, providerExigido, provider);
 
         return Resolver(projeto, metodo);
     }

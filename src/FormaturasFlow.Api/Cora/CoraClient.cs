@@ -20,6 +20,14 @@ public class CoraClient(HttpClient http, IOptions<CoraOptions> opt, ILogger<Cora
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    /*  Envio do payload: mantem os nomes em snake_case (SEM camelCase, que a
+        Cora rejeita em payment_terms) e omite campos nulos — assim o bloco
+        `notification` so vai quando ha e-mail do cliente.  */
+    private static readonly JsonSerializerOptions JsonSend = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
     public enum InvoiceKind { PIX, BOLETO }
 
     public record CriarInvoiceRequest(
@@ -90,6 +98,24 @@ public class CoraClient(HttpClient http, IOptions<CoraOptions> opt, ILogger<Cora
             (que renomeava payment_terms -> paymentTerms e a Cora rejeitava
             com "paymentTerms must not be null").  */
         var documento = OnlyDigits(r.CustomerDocument);
+
+        /*  Notificacao por e-mail: faz a Cora enviar o boleto/cobranca para o
+            e-mail do cliente (lembrete antes do vencimento, no dia, e aviso de
+            pagamento). So incluimos quando ha e-mail — JsonSend omite o nulo.  */
+        object? notification = string.IsNullOrWhiteSpace(r.CustomerEmail) ? null : new
+        {
+            name     = r.CustomerName,
+            channels = new[]
+            {
+                new
+                {
+                    channel = "EMAIL",
+                    contact = r.CustomerEmail,
+                    rules   = new[] { "NOTIFY_TWO_DAYS_BEFORE_DUE_DATE", "NOTIFY_ON_DUE_DATE", "NOTIFY_WHEN_PAID" }
+                }
+            }
+        };
+
         req.Content = JsonContent.Create(new
         {
             code = r.ExternalReference,
@@ -113,8 +139,9 @@ public class CoraClient(HttpClient http, IOptions<CoraOptions> opt, ILogger<Cora
                 }
             },
             payment_terms = new { due_date = r.DueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) },
-            payment_forms = new[] { r.Kind == InvoiceKind.PIX ? "PIX" : "BANK_SLIP" }
-        });
+            payment_forms = new[] { r.Kind == InvoiceKind.PIX ? "PIX" : "BANK_SLIP" },
+            notification
+        }, options: JsonSend);
 
         using var resp = await http.SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
