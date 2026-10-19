@@ -36,11 +36,14 @@ public sealed class AsaasPaymentGateway(
             ["externalReference"] = req.ReferenciaExterna
         };
 
-        if (req.Metodo == MetodoPagamento.CartaoCredito)
+        /*  Cartão COM dados do portador → cobrança direta (tokeniza e cobra na
+            hora).  SEM dados → cria a cobrança CREDIT_CARD e o Asaas devolve o
+            `invoiceUrl`: o checkout hospedado onde o pagador digita o cartão e
+            escolhe o parcelamento.  Assim o dado de cartão nunca passa por nós
+            (PCI fica com o Asaas) — é o fluxo usado pelo link do formando.  */
+        if (req.Metodo == MetodoPagamento.CartaoCredito && req.Cartao is not null)
         {
-            var cartao = req.Cartao
-                ?? throw new DadosPagamentoIncompletosException("cartao",
-                    "Pagamento com cartão exige os dados do portador.");
+            var cartao = req.Cartao;
 
             var cep = req.Pagador.Cep
                 ?? throw new DadosPagamentoIncompletosException("pagador.cep",
