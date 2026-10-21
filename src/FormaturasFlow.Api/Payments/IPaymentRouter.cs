@@ -18,6 +18,11 @@ public interface IPaymentRouter
         habilitado para o domínio.  */
     IPaymentGateway Resolver(TipoProjeto projeto, MetodoPagamento metodo);
 
+    /*  Como Resolver, mas honra um provedor preferido (ex.: o banco do boleto
+        escolhido na turma) — desde que seja uma alternativa permitida para o
+        método.  Preferência inválida cai no provedor padrão, sem erro.  */
+    IPaymentGateway ResolverPreferencial(TipoProjeto projeto, MetodoPagamento metodo, PaymentProvider? preferido);
+
     /*  Sobrecarga defensiva para chamadores que já carregam um provider
         (reprocessamento, conciliação, webhook).  Lança DomainException
         se o provider exigido não for o do domínio.  */

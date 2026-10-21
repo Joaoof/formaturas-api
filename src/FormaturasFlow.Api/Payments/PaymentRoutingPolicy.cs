@@ -9,8 +9,11 @@ namespace FormaturasFlow.Api.Payments;
 public sealed record PaymentRoutingPolicy(
     PaymentProvider Provider,
     IReadOnlySet<MetodoPagamento> Metodos,
-    IReadOnlyDictionary<MetodoPagamento, PaymentProvider>? ProviderPorMetodo = null)
+    IReadOnlyDictionary<MetodoPagamento, PaymentProvider>? ProviderPorMetodo = null,
+    IReadOnlyDictionary<MetodoPagamento, IReadOnlySet<PaymentProvider>>? ProvedoresAlternativos = null)
 {
+    private static readonly IReadOnlySet<PaymentProvider> Nenhum = new HashSet<PaymentProvider>();
+
     /*  Provider efetivo de um método: usa o override quando existir, senão o
         provider primário do domínio.  É o que permite a Formatura ficar na
         Cora (boleto/Pix) e ainda assim mandar o CARTÃO para o Asaas, que é
@@ -18,9 +21,15 @@ public sealed record PaymentRoutingPolicy(
     public PaymentProvider ProviderDoMetodo(MetodoPagamento metodo) =>
         ProviderPorMetodo is not null && ProviderPorMetodo.TryGetValue(metodo, out var p) ? p : Provider;
 
+    /*  Provedores que o método TAMBÉM aceita além do padrão — escolhidos por
+        turma.  Ex.: o boleto/Pix da Formatura pode ir pra Cora (padrão) OU
+        Asaas, conforme o banco que a empresa definiu naquela turma.  */
+    public IReadOnlySet<PaymentProvider> AlternativasDoMetodo(MetodoPagamento metodo) =>
+        ProvedoresAlternativos is not null && ProvedoresAlternativos.TryGetValue(metodo, out var s) ? s : Nenhum;
+
     /*  Casamentos → Asaas (cartão + boleto).  Formaturas → Cora (boleto +
-        Pix) e cartão via Asaas.  Qualquer cruzamento fora daqui vira
-        DomainException.  */
+        Pix) por padrão, cartão via Asaas, e boleto/Pix podem ir pro Asaas
+        quando a turma escolhe esse banco.  */
     public static readonly IReadOnlyDictionary<TipoProjeto, PaymentRoutingPolicy> Padrao =
         new Dictionary<TipoProjeto, PaymentRoutingPolicy>
         {
@@ -32,6 +41,11 @@ public sealed record PaymentRoutingPolicy(
                 new Dictionary<MetodoPagamento, PaymentProvider>
                 {
                     [MetodoPagamento.CartaoCredito] = PaymentProvider.Asaas
+                },
+                new Dictionary<MetodoPagamento, IReadOnlySet<PaymentProvider>>
+                {
+                    [MetodoPagamento.Boleto] = new HashSet<PaymentProvider> { PaymentProvider.Asaas },
+                    [MetodoPagamento.Pix]    = new HashSet<PaymentProvider> { PaymentProvider.Asaas }
                 })
         };
 }

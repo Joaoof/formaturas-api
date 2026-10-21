@@ -56,6 +56,31 @@ public sealed class PaymentGatewayFactory : IPaymentRouter
         return gateway;
     }
 
+    public IPaymentGateway ResolverPreferencial(TipoProjeto projeto, MetodoPagamento metodo, PaymentProvider? preferido)
+    {
+        var politica = PoliticaDe(projeto);
+
+        if (!politica.Metodos.Contains(metodo))
+            throw new MetodoPagamentoNaoSuportadoException(projeto, metodo, MetodosSuportados(projeto));
+
+        var provider = politica.ProviderDoMetodo(metodo);
+
+        /*  Honra o banco escolhido pela turma, mas só se for uma alternativa
+            permitida pro método — ninguém força um cruzamento proibido.  */
+        if (preferido is PaymentProvider pref && pref != provider && politica.AlternativasDoMetodo(metodo).Contains(pref))
+            provider = pref;
+
+        if (!_gateways.TryGetValue(provider, out var gateway))
+            throw new InvalidOperationException(
+                $"Política de {projeto} exige {provider} para {metodo}, mas nenhum IPaymentGateway desse provider foi registrado.");
+
+        if (!gateway.Suporta(metodo))
+            throw new MetodoPagamentoNaoSuportadoException(
+                projeto, metodo, MetodosSuportados(projeto).Where(gateway.Suporta).ToArray());
+
+        return gateway;
+    }
+
     public IPaymentGateway Resolver(TipoProjeto projeto, MetodoPagamento metodo, PaymentProvider providerExigido)
     {
         var politica = PoliticaDe(projeto);

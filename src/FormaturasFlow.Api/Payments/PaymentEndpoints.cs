@@ -21,6 +21,10 @@ public static class PaymentEndpoints
         PagadorInfo        Pagador,
         CartaoCreditoInfo? Cartao = null,
 
+        /*  Banco preferido pra boleto/Pix (ex.: "asaas"), escolhido na turma.
+            Só é honrado se for alternativa permitida — senão cai no padrão.  */
+        string?            Provedor = null,
+
         /*  Opcional, mas é o que fecha o ciclo: sem a parcela, a cobrança
             nasce órfã e o webhook do PSP não tem o que baixar depois.  */
         Guid?              ParcelaId = null);
@@ -141,9 +145,13 @@ public static class PaymentEndpoints
                 return Results.Conflict(new { codigo = "PARCELA_JA_QUITADA", erro = "Parcela já quitada." });
         }
 
-        /*  O caso de uso não conhece Asaas nem Cora: pede o gateway ao
-            router e a matriz decide (ou lança DomainException → 422).  */
-        var gateway = router.Resolver(projeto, metodo);
+        /*  O caso de uso não conhece Asaas nem Cora: pede o gateway ao router.
+            O provedor preferido (banco da turma) é honrado se for permitido.  */
+        PaymentProvider? preferido = null;
+        if (!string.IsNullOrWhiteSpace(req.Provedor) && Enum.TryParse<PaymentProvider>(req.Provedor, ignoreCase: true, out var prov))
+            preferido = prov;
+
+        var gateway = router.ResolverPreferencial(projeto, metodo, preferido);
 
         var cobranca = await gateway.CriarCobrancaAsync(new CobrancaRequest(
             Metodo: metodo,
