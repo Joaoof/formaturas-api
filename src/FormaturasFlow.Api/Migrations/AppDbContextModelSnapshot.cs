@@ -816,6 +816,9 @@ namespace FormaturasFlow.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("VisitasAdesao")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Nome");

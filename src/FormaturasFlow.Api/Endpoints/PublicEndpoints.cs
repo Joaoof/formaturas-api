@@ -63,6 +63,18 @@ public static class PublicEndpoints
             .Produces<TurmaPublica>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status404NotFound);
 
+        group.MapPost("/turmas/{id:guid}/visita", async (Guid id, AppDbContext db) =>
+        {
+            /*  Incremento atomico no banco — nao carrega a turma, nao dá corrida
+                com quem edita os pacotes.  */
+            var n = await db.Turmas.Where(t => t.Id == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.VisitasAdesao, t => t.VisitasAdesao + 1));
+            return n > 0 ? Results.NoContent() : Results.NotFound();
+        })
+            .WithSummary("Registra um acesso ao link de adesao (contador de visitas)")
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapPost("/adesao", AdesaoAsync)
             .WithSummary("Adesao publica do formando: cria/atualiza aluno, contrato e parcelas em transacao")
             .Produces<AdesaoResponse>(StatusCodes.Status200OK)

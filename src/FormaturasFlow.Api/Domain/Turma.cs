@@ -29,6 +29,10 @@ public class Turma
     public DateOnly? DataEvento { get; set; }
     public StatusTurma Status { get; set; } = StatusTurma.Ativa;
     public string? Observacoes { get; set; }
+
+    /*  Quantas vezes o link de adesao foi aberto (contador de acessos).  */
+    public int VisitasAdesao { get; set; } = 0;
+
     public DateTimeOffset CriadaEm { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset AtualizadaEm { get; set; } = DateTimeOffset.UtcNow;
 
