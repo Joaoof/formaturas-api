@@ -57,13 +57,17 @@ public class PaymentGatewayFactoryTests
             .Which.Codigo.Should().Be(MetodoPagamentoNaoSuportadoException.CodigoErro);
     }
 
+    /*  A Formatura fica na Cora para boleto/Pix, mas a Cora não processa
+        cartão: o cartão da formatura vai para o Asaas pelo override da
+        política.  Este teste já afirmou o contrário — o cartão na formatura
+        passou a existir (PaymentRoutingPolicy) e o teste ficou vermelho,
+        escondendo regressão de pagamento por semanas.  */
     [Fact]
-    public void Formatura_Com_Cartao_Lanca_DomainException()
+    public void Formatura_Com_Cartao_Roteia_Para_Asaas()
     {
-        var acao = () => Criar().Resolver(TipoProjeto.Formatura, MetodoPagamento.CartaoCredito);
+        var gateway = Criar().Resolver(TipoProjeto.Formatura, MetodoPagamento.CartaoCredito);
 
-        acao.Should().Throw<MetodoPagamentoNaoSuportadoException>()
-            .Which.Metodo.Should().Be(MetodoPagamento.CartaoCredito);
+        gateway.Provider.Should().Be(PaymentProvider.Asaas);
     }
 
     [Fact]
@@ -92,15 +96,17 @@ public class PaymentGatewayFactoryTests
         acao.Should().Throw<ProviderNaoPermitidoException>();
     }
 
+    /*  Usa Casamento + Pix porque a Formatura passou a aceitar os três
+        métodos: o cruzamento proibido que sobra é esse.  */
     [Fact]
     public void Excecao_Carrega_Alternativas_Para_O_Front()
     {
-        var acao = () => Criar().Resolver(TipoProjeto.Formatura, MetodoPagamento.CartaoCredito);
+        var acao = () => Criar().Resolver(TipoProjeto.Casamento, MetodoPagamento.Pix);
 
         var ex = acao.Should().Throw<MetodoPagamentoNaoSuportadoException>().Which;
-        ex.Suportados.Should().BeEquivalentTo([MetodoPagamento.Boleto, MetodoPagamento.Pix]);
-        ex.Detalhes["metodosSuportados"].Should().BeEquivalentTo(new[] { "Boleto", "Pix" });
-        ex.Detalhes["tipoProjeto"].Should().Be("Formatura");
+        ex.Suportados.Should().BeEquivalentTo([MetodoPagamento.Boleto, MetodoPagamento.CartaoCredito]);
+        ex.Detalhes["metodosSuportados"].Should().BeEquivalentTo(new[] { "CartaoCredito", "Boleto" });
+        ex.Detalhes["tipoProjeto"].Should().Be("Casamento");
     }
 
     [Fact]
@@ -111,8 +117,10 @@ public class PaymentGatewayFactoryTests
         router.MetodosSuportados(TipoProjeto.Casamento)
             .Should().BeEquivalentTo([MetodoPagamento.Boleto, MetodoPagamento.CartaoCredito]);
         router.MetodosSuportados(TipoProjeto.Formatura)
-            .Should().BeEquivalentTo([MetodoPagamento.Boleto, MetodoPagamento.Pix]);
+            .Should().BeEquivalentTo([MetodoPagamento.Boleto, MetodoPagamento.Pix, MetodoPagamento.CartaoCredito]);
 
+        /*  `ProviderDe` é o PSP PADRÃO do domínio — o cartão da formatura sai
+            pelo Asaas sem mudar isso (ver ProviderDoMetodo).  */
         router.ProviderDe(TipoProjeto.Casamento).Should().Be(PaymentProvider.Asaas);
         router.ProviderDe(TipoProjeto.Formatura).Should().Be(PaymentProvider.Cora);
     }
@@ -129,7 +137,10 @@ public class PaymentGatewayFactoryTests
                 var resolver = () => router.Resolver(projeto, metodo);
 
                 if (permitido)
-                    resolver().Provider.Should().Be(router.ProviderDe(projeto));
+                    /*  O esperado é o provider DO MÉTODO, não o do domínio:
+                        o cartão da formatura é a exceção que a matriz prevê.  */
+                    resolver().Provider.Should()
+                        .Be(PaymentRoutingPolicy.Padrao[projeto].ProviderDoMetodo(metodo));
                 else
                     resolver.Should().Throw<MetodoPagamentoNaoSuportadoException>();
             }
