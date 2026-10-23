@@ -40,7 +40,13 @@ public static class PublicEndpoints
         /*  Rubrica desenhada pelo formando (PNG em data URL).  Opcional no
             contrato para não quebrar quem já integra, mas é o que transforma
             o aceite num documento com valor de prova.  */
-        string? AssinaturaImagem = null);
+        string? AssinaturaImagem = null,
+
+        /*  O que o formando escolheu no passo 2 da adesão.  Era ignorado: o
+            contrato nascia "boleto" mesmo para quem escolheu cartão, e o
+            painel então oferecia boleto a quem tinha contratado cartão.
+            Opcional e com padrão para não quebrar integração antiga.  */
+        string? FormaPagamento = null);
 
     public record AdesaoResponse(
         Guid AlunoId, string Nome, string Cpf, string LoginUsuario,
@@ -85,6 +91,18 @@ public static class PublicEndpoints
 
     private static string ApenasDigitos(string s) => new(s.Where(char.IsDigit).ToArray());
 
+    /*  Normaliza o que vem do formulário para os ids que o resto do sistema
+        já usa (FORMAS_PAGAMENTO no front e o rótulo do PDF do contrato).
+        Qualquer coisa que não seja cartão cai em boleto: é o padrão da turma
+        que não liberou cartão, e errar para o lado do boleto não cobra
+        ninguém num cartão que ele não escolheu.  */
+    private static string NormalizarFormaPagamento(string? forma) =>
+        (forma ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "cartao" or "cartão" or "cartao_credito" or "cartaocredito" or "credit_card" => "cartao_credito",
+            _ => "boleto"
+        };
+
     private static async Task<IResult> AdesaoAsync(
         AdesaoRequest req,
         HttpContext ctx,
@@ -120,6 +138,8 @@ public static class PublicEndpoints
 
         await db.SaveChangesAsync();
 
+        var formaPagamento = NormalizarFormaPagamento(req.FormaPagamento);
+
         var contratosVelhos = await db.Contratos.Where(c => c.AlunoId == aluno.Id).ToListAsync();
         if (contratosVelhos.Count > 0)
             db.Contratos.RemoveRange(contratosVelhos);
@@ -134,7 +154,7 @@ public static class PublicEndpoints
             NumParcelas = req.NumParcelas,
             DiaVencimento = req.DiaVencimento,
             AutorizaImagem = req.AutorizaImagem,
-            FormaPagamento = "boleto",
+            FormaPagamento = formaPagamento,
             DataContrato = DateOnly.FromDateTime(DateTime.UtcNow),
             TextoContrato = req.TextoContratoCompleto
         };
@@ -161,7 +181,7 @@ public static class PublicEndpoints
                 Valor = p.Valor,
                 ValorPago = 0,
                 Vencimento = p.Vencimento,
-                FormaPagamento = "boleto",
+                FormaPagamento = formaPagamento,
                 Status = StatusParcela.Pendente
             });
         }

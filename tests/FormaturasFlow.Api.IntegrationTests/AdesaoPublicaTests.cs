@@ -31,8 +31,9 @@ public class AdesaoPublicaTests(ApiFactory factory) : IAsyncLifetime
         return (await resp.Content.ReadFromJsonAsync<IdMin>())!.Id;
     }
 
-    private static object Corpo(Guid turmaId, string? assinatura, string cpf = Cpf) => new
+    private static object Corpo(Guid turmaId, string? assinatura, string cpf = Cpf, string? formaPagamento = null) => new
     {
+        formaPagamento,
         turmaId,
         dadosPessoais = new
         {
@@ -157,6 +158,42 @@ public class AdesaoPublicaTests(ApiFactory factory) : IAsyncLifetime
         login.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    /*  O passo 2 da adesão deixa escolher boleto ou cartão.  A escolha era
+        descartada: contrato e parcelas nasciam "boleto" para todo mundo, e
+        quem contratava cartão abria o painel e via boleto.  `null` (cliente
+        antigo, sem o campo) tem de continuar caindo em boleto.  */
+    [Theory]
+    [InlineData("cartao", "cartao_credito")]
+    [InlineData("cartao_credito", "cartao_credito")]
+    [InlineData("boleto", "boleto")]
+    [InlineData(null, "boleto")]
+    public async Task Forma_De_Pagamento_Escolhida_Chega_Ao_Contrato_E_As_Parcelas(
+        string? enviada, string esperada)
+    {
+        var turmaId = await CriarTurmaAsync();
+        var http = factory.CreateClient();
+
+        var resp = await http.PostAsJsonAsync("/api/v1/public/adesao",
+            Corpo(turmaId, PngValido, formaPagamento: enviada));
+        resp.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var login = await http.PostAsJsonAsync("/auth/login", new
+        {
+            email = PublicEndpoints.EmailDoFormando(Cpf),
+            password = Cpf
+        });
+        var tok = await login.Content.ReadFromJsonAsync<TokenMin>();
+
+        var comToken = factory.CreateClient();
+        comToken.WithToken(tok!.AccessToken);
+
+        var meus = await comToken.GetFromJsonAsync<AlunoComContratos[]>("/api/v1/alunos/me");
+        var contrato = meus!.Single().Contratos.Single();
+
+        contrato.FormaPagamento.Should().Be(esperada);
+        contrato.Parcelas.Should().OnlyContain(p => p.FormaPagamento == esperada);
+    }
+
     [Fact]
     public async Task Cpf_Invalido_Nao_Cria_Nada()
     {
@@ -192,4 +229,7 @@ public class AdesaoPublicaTests(ApiFactory factory) : IAsyncLifetime
     private record AdesaoMin(Guid AlunoId, string Nome, string Cpf, string LoginUsuario, Guid ContratoId, bool Assinado);
     private record TokenMin(string AccessToken, string Email, string[] Roles);
     private record AlunoMin(Guid Id, string NomeCompleto);
+    private record AlunoComContratos(Guid Id, ContratoMin[] Contratos);
+    private record ContratoMin(string? FormaPagamento, ParcelaMin[] Parcelas);
+    private record ParcelaMin(int Numero, string? FormaPagamento);
 }
