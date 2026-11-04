@@ -42,7 +42,11 @@ public record CobrancaRequest(
     string             Descricao,
     string             ReferenciaExterna,
     PagadorInfo        Pagador,
-    CartaoCreditoInfo? Cartao = null);
+    CartaoCreditoInfo? Cartao = null,
+
+    /*  Parcelas no cartão (1 = à vista). O Valor é sempre o TOTAL; o Asaas
+        divide em N vezes. Juros ao cliente é config da conta Asaas.  */
+    int?               Parcelas = null);
 
 /*  Resposta normalizada: o chamador nunca vê o JSON bruto do PSP.  */
 public record CobrancaCriada(

@@ -71,6 +71,15 @@ public sealed class AsaasPaymentGateway(
                 addressNumber = numero,
                 phone         = req.Pagador.Telefone
             };
+
+            /*  Parcelamento no cartão: o Asaas divide o TOTAL em N vezes. O juro
+                ao cliente (se houver) é configurado na conta Asaas.  */
+            if (req.Parcelas is int n && n > 1)
+            {
+                payload.Remove("value");
+                payload["installmentCount"] = n;
+                payload["totalValue"]       = req.Valor;
+            }
         }
 
         using var resp = await http.PostAsJsonAsync($"{_opt.BaseUrl}/payments", payload, ct);

@@ -48,11 +48,24 @@ public static class PublicEndpoints
             contrato nascia "boleto" mesmo para quem escolheu cartão, e o
             painel então oferecia boleto a quem tinha contratado cartão.
             Opcional e com padrão para não quebrar integração antiga.  */
-        string? FormaPagamento = null);
+        string? FormaPagamento = null,
+
+        /*  Id da cobrança do cartão já aprovada no passo de pagamento. Quando
+            vem, as parcelas nascem PAGAS (o cartão quitou o total).  */
+        string? CartaoChargeId = null);
 
     public record AdesaoResponse(
         Guid AlunoId, string Nome, string Cpf, string LoginUsuario,
         Guid ContratoId, bool Assinado);
+
+    public record CartaoInfo(string Titular, string Numero, int MesValidade, int AnoValidade, string Cvv);
+
+    public record CobrancaCartaoRequest(
+        Guid TurmaId, decimal Valor, int Parcelas,
+        string Nome, string Documento, string Email, string Cep, string NumeroEndereco,
+        string Descricao, CartaoInfo Cartao);
+
+    public record CobrancaCartaoResponse(bool Aprovado, string? ChargeId, string? Status, string Mensagem);
 
     public static IEndpointRouteBuilder MapPublicEndpoints(this IEndpointRouteBuilder app)
     {
@@ -87,6 +100,10 @@ public static class PublicEndpoints
             .WithSummary("Adesao publica do formando: cria/atualiza aluno, contrato e parcelas em transacao")
             .Produces<AdesaoResponse>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/cobranca-cartao", CobrancaCartaoAsync)
+            .WithSummary("Cobra o cartao (Asaas) no passo de pagamento da adesao — retorna aprovado/recusado")
+            .Produces<CobrancaCartaoResponse>(StatusCodes.Status200OK);
 
         return app;
     }
@@ -176,6 +193,9 @@ public static class PublicEndpoints
                 ctx.Connection.RemoteIpAddress?.ToString(),
                 ctx.Request.Headers.UserAgent.ToString());
 
+        /*  Cartão aprovado quita o total na hora: as parcelas já nascem PAGAS,
+            com o id da cobrança do Asaas.  */
+        var cartaoPago = formaPagamento == "cartao_credito" && !string.IsNullOrWhiteSpace(req.CartaoChargeId);
         foreach (var p in req.Parcelas)
         {
             db.Parcelas.Add(new Parcela
@@ -183,10 +203,12 @@ public static class PublicEndpoints
                 ContratoId = contrato.Id,
                 Numero = p.Numero,
                 Valor = p.Valor,
-                ValorPago = 0,
+                ValorPago = cartaoPago ? p.Valor : 0,
                 Vencimento = p.Vencimento,
                 FormaPagamento = formaPagamento,
-                Status = StatusParcela.Pendente
+                Status = cartaoPago ? StatusParcela.Pago : StatusParcela.Pendente,
+                PspProvider = cartaoPago ? "asaas" : null,
+                PspChargeId = cartaoPago ? req.CartaoChargeId : null
             });
         }
 
@@ -289,6 +311,45 @@ public static class PublicEndpoints
             {
                 log.LogError(ex, "Falha ao gerar boleto da parcela {ParcelaId} na adesao", p.Id);
             }
+        }
+    }
+
+    /*  Cobra o cartão no passo de pagamento da adesão (antes de finalizar).
+        Aprovado → o front segue para assinar; recusado → o front mostra
+        "continuar sem pagamento". O dado de cartão não é persistido aqui.  */
+    private static async Task<IResult> CobrancaCartaoAsync(
+        CobrancaCartaoRequest req,
+        IPaymentRouter router,
+        ILoggerFactory logs)
+    {
+        var log = logs.CreateLogger("Public.CartaoAdesao");
+        try
+        {
+            var gateway = router.ResolverPreferencial(
+                TipoProjeto.Formatura, MetodoPagamento.CartaoCredito, PaymentProvider.Asaas);
+
+            var cob = await gateway.CriarCobrancaAsync(new CobrancaRequest(
+                Metodo: MetodoPagamento.CartaoCredito,
+                Valor: req.Valor,
+                Vencimento: DateOnly.FromDateTime(DateTime.UtcNow),
+                Descricao: req.Descricao,
+                ReferenciaExterna: $"cartao:{req.TurmaId}:{ApenasDigitos(req.Documento)}:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
+                Pagador: new PagadorInfo(req.Nome, req.Documento, req.Email, null, req.Cep, req.NumeroEndereco),
+                Cartao: new CartaoCreditoInfo(req.Cartao.Titular, req.Cartao.Numero, req.Cartao.MesValidade, req.Cartao.AnoValidade, req.Cartao.Cvv),
+                Parcelas: req.Parcelas));
+
+            var aprovado = cob.Status is "CONFIRMED" or "RECEIVED" or "RECEIVED_IN_CASH" or "APPROVED";
+            return Results.Ok(new CobrancaCartaoResponse(
+                aprovado, cob.ChargeId, cob.Status,
+                aprovado
+                    ? "Pagamento aprovado no cartão!"
+                    : $"O cartão não foi aprovado (status {cob.Status})."));
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Cartão recusado/erro na adesão");
+            return Results.Ok(new CobrancaCartaoResponse(false, null, null,
+                "Não conseguimos aprovar o cartão. Tente outro cartão ou escolha outra forma de pagamento."));
         }
     }
 
