@@ -1,7 +1,9 @@
 using FormaturasFlow.Api.Data;
 using FormaturasFlow.Api.Domain;
+using FormaturasFlow.Api.Payments;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace FormaturasFlow.Api.Endpoints;
 
@@ -93,13 +95,14 @@ public static class PublicEndpoints
 
     /*  Normaliza o que vem do formulário para os ids que o resto do sistema
         já usa (FORMAS_PAGAMENTO no front e o rótulo do PDF do contrato).
-        Qualquer coisa que não seja cartão cai em boleto: é o padrão da turma
-        que não liberou cartão, e errar para o lado do boleto não cobra
-        ninguém num cartão que ele não escolheu.  */
+        Qualquer coisa que não seja cartão nem pix cai em boleto: é o padrão
+        da turma que não liberou cartão, e errar para o lado do boleto não
+        cobra ninguém num cartão que ele não escolheu.  */
     private static string NormalizarFormaPagamento(string? forma) =>
         (forma ?? string.Empty).Trim().ToLowerInvariant() switch
         {
             "cartao" or "cartão" or "cartao_credito" or "cartaocredito" or "credit_card" => "cartao_credito",
+            "pix" => "pix",
             _ => "boleto"
         };
 
@@ -107,7 +110,8 @@ public static class PublicEndpoints
         AdesaoRequest req,
         HttpContext ctx,
         AppDbContext db,
-        UserManager<ApplicationUser> users)
+        UserManager<ApplicationUser> users,
+        IServiceScopeFactory scopeFactory)
     {
         var cpf = ApenasDigitos(req.DadosPessoais.Cpf);
         if (cpf.Length != 11) throw new DadosInvalidosException("CPF_INVALIDO", "CPF invalido.");
@@ -196,9 +200,96 @@ public static class PublicEndpoints
         await db.SaveChangesAsync();
         await tx.CommitAsync();
 
+        /*  Boleto: gera TODOS os boletos automaticamente já na finalização, em
+            background (fora da transação e da request, pra não travar a adesão
+            em N chamadas ao banco). O painel então mostra a 2ª via, sem pedir
+            pra gerar de novo.  O e-mail sai pelo próprio PSP.  */
+        if (formaPagamento == "boleto")
+        {
+            var pagador = new PagadorInfo(aluno.NomeCompleto, cpf, aluno.Email, aluno.Whatsapp);
+            var banco = BancoDaTurma(turma.Observacoes);
+            var contratoId = contrato.Id;
+            var descricao = $"{turma.Nome} - {req.Pacote}";
+            _ = Task.Run(() => GerarBoletosAsync(scopeFactory, contratoId, banco, pagador, descricao));
+        }
+
         return Results.Ok(new AdesaoResponse(
             aluno.Id, aluno.NomeCompleto, cpf, aluno.LoginUsuario ?? cpf,
             contrato.Id, contrato.Assinado));
+    }
+
+    /*  Lê o banco (Cora/Asaas) que a empresa escolheu pra turma — grava no
+        JSON de observacoes.  Null = padrão do domínio (Cora).  */
+    private static PaymentProvider? BancoDaTurma(string? observacoes)
+    {
+        if (string.IsNullOrWhiteSpace(observacoes)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(observacoes);
+            if (doc.RootElement.TryGetProperty("banco", out var b) && b.ValueKind == JsonValueKind.String)
+            {
+                return (b.GetString()?.Trim().ToLowerInvariant()) switch
+                {
+                    "asaas" => PaymentProvider.Asaas,
+                    "cora"  => PaymentProvider.Cora,
+                    _       => (PaymentProvider?)null
+                };
+            }
+        }
+        catch { /*  observacoes em texto livre — ignora  */ }
+        return null;
+    }
+
+    /*  Gera o boleto de cada parcela do contrato, em background e com escopo
+        próprio (a request já respondeu). Falha de uma parcela não derruba as
+        outras — fica logada e o painel pode reemitir a que faltou.  */
+    private static async Task GerarBoletosAsync(
+        IServiceScopeFactory scopeFactory,
+        Guid contratoId,
+        PaymentProvider? banco,
+        PagadorInfo pagador,
+        string descricaoBase)
+    {
+        using var scope = scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var router = scope.ServiceProvider.GetRequiredService<IPaymentRouter>();
+        var log = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Adesao.Boletos");
+
+        var parcelas = await db.Parcelas
+            .Where(p => p.ContratoId == contratoId)
+            .OrderBy(p => p.Numero)
+            .ToListAsync();
+
+        foreach (var p in parcelas)
+        {
+            if (!string.IsNullOrEmpty(p.PspChargeId)) continue;  // já emitido
+            try
+            {
+                var gateway = router.ResolverPreferencial(TipoProjeto.Formatura, MetodoPagamento.Boleto, banco);
+                var cob = await gateway.CriarCobrancaAsync(new CobrancaRequest(
+                    Metodo: MetodoPagamento.Boleto,
+                    Valor: p.Valor,
+                    Vencimento: p.Vencimento,
+                    Descricao: $"{descricaoBase} - Parcela {p.Numero}",
+                    ReferenciaExterna: $"parcela:{p.Id}",
+                    Pagador: pagador));
+
+                p.PspProvider = cob.Provider.ToString().ToLowerInvariant();
+                p.PspChargeId = cob.ChargeId;
+                p.PspStatus = cob.Status;
+                p.BoletoUrl = cob.BoletoUrl;
+                p.BoletoLinhaDigitavel = cob.BoletoLinhaDigitavel;
+                p.BoletoCodigoBarras = cob.BoletoCodigoBarras;
+                p.LinkPagamento = cob.LinkPagamento;
+                p.FormaPagamento = "boleto";
+                p.AtualizadaEm = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex, "Falha ao gerar boleto da parcela {ParcelaId} na adesao", p.Id);
+            }
+        }
     }
 
     /*  Idempotente: refazer a adesão com o mesmo CPF reaproveita o usuário
