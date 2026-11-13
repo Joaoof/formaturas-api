@@ -116,7 +116,12 @@ public static class AlunoEndpoints
         return app;
     }
 
-    private static async Task<IResult> ListMineAsync(AppDbContext db, HttpContext ctx)
+    private static async Task<IResult> ListMineAsync(
+        AppDbContext db,
+        HttpContext ctx,
+        IEnumerable<IConsultaCobranca> consultas,
+        ILoggerFactory logs,
+        CancellationToken ct)
     {
         var sub = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                   ?? ctx.User.FindFirst("sub")?.Value;
@@ -133,6 +138,14 @@ public static class AlunoEndpoints
             if (digits.Length == 11) cpfDoEmail = digits;
         }
 
+        /*  Reconciliação preguiçosa do Pix: se o webhook da Cora escapou, uma
+            parcela Pix já paga ficaria PENDENTE para sempre.  Ao abrir a área
+            do formando, reconsultamos a Cora nas parcelas Pix pendentes dele e
+            baixamos as que já estão pagas.  É best-effort: nunca derruba o /me,
+            e o escopo (Pix pendente com cobrança na Cora) mantém barato — em
+            geral 1 chamada.  */
+        await ReconciliarPixPendentesAsync(db, consultas, logs, userId, cpfDoEmail, ct);
+
         var q = db.Alunos.Include(a => a.Turma)
             .Include(a => a.Contratos).ThenInclude(c => c.Parcelas)
             .AsQueryable();
@@ -142,8 +155,72 @@ public static class AlunoEndpoints
         else
             q = q.Where(a => a.UserId == userId || a.Cpf == cpfDoEmail);
 
-        var alunos = await q.AsNoTracking().ToListAsync();
+        var alunos = await q.AsNoTracking().ToListAsync(ct);
         return Results.Ok(alunos);
+    }
+
+    private static readonly string[] StatusPagoCora =
+        ["PAID", "SETTLED", "PAID_PARTIALLY", "PAID_MANUALLY"];
+
+    private static async Task ReconciliarPixPendentesAsync(
+        AppDbContext db,
+        IEnumerable<IConsultaCobranca> consultas,
+        ILoggerFactory logs,
+        Guid userId,
+        string? cpfDoEmail,
+        CancellationToken ct)
+    {
+        var log = logs.CreateLogger("Pagamentos.ReconciliacaoPix");
+        try
+        {
+            var cora = consultas.FirstOrDefault(c => c.Provider == PaymentProvider.Cora);
+            if (cora is null) return;
+
+            var contratoIds = await db.Alunos
+                .Where(a => cpfDoEmail == null ? a.UserId == userId : (a.UserId == userId || a.Cpf == cpfDoEmail))
+                .SelectMany(a => a.Contratos.Select(c => c.Id))
+                .ToListAsync(ct);
+            if (contratoIds.Count == 0) return;
+
+            var pendentes = await db.Parcelas
+                .Where(p => contratoIds.Contains(p.ContratoId)
+                            && p.Status == StatusParcela.Pendente
+                            && p.PspProvider == "cora"
+                            && p.PspChargeId != null
+                            && p.FormaPagamento != null
+                            && p.FormaPagamento.ToLower() == "pix")
+                .Take(10)
+                .ToListAsync(ct);
+
+            var baixou = false;
+            foreach (var p in pendentes)
+            {
+                try
+                {
+                    var st = await cora.ConsultarCobrancaAsync(p.PspChargeId!, ct);
+                    p.PspStatus = st.Status;
+                    p.AtualizadaEm = DateTimeOffset.UtcNow;
+                    if (st.Status is not null && StatusPagoCora.Contains(st.Status.ToUpperInvariant()))
+                    {
+                        p.Status = StatusParcela.Pago;
+                        p.ValorPago = st.ValorPago is > 0 ? st.ValorPago.Value : p.Valor;
+                        p.DataPagamento = DateOnly.FromDateTime(DateTime.UtcNow);
+                        baixou = true;
+                        log.LogInformation("Reconciliação Pix baixou a parcela {Id} (charge {Charge}).", p.Id, p.PspChargeId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning(ex, "Reconciliação Pix falhou na parcela {Id}; segue sem derrubar o /me.", p.Id);
+                }
+            }
+
+            if (baixou) await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Reconciliação Pix ignorada (erro não fatal).");
+        }
     }
 
     private static async Task<IResult> ListAsync(
