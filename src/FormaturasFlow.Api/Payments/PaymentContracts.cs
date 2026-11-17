@@ -46,7 +46,11 @@ public record CobrancaRequest(
 
     /*  Parcelas no cartão (1 = à vista). O Valor é sempre o TOTAL; o Asaas
         divide em N vezes. Juros ao cliente é config da conta Asaas.  */
-    int?               Parcelas = null);
+    int?               Parcelas = null,
+
+    /*  IP do dispositivo do pagador. O Asaas EXIGE no cartão (anti-fraude):
+        sem ele a cobrança costuma ser recusada mesmo com cartão válido.  */
+    string?            RemoteIp = null);
 
 /*  Resposta normalizada: o chamador nunca vê o JSON bruto do PSP.  */
 public record CobrancaCriada(

@@ -72,6 +72,11 @@ public sealed class AsaasPaymentGateway(
                 phone         = req.Pagador.Telefone
             };
 
+            /*  O Asaas exige o IP do pagador no cartão (anti-fraude). Sem ele a
+                transação é recusada mesmo com cartão bom.  */
+            if (!string.IsNullOrWhiteSpace(req.RemoteIp))
+                payload["remoteIp"] = req.RemoteIp;
+
             /*  Parcelamento no cartão: o Asaas divide o TOTAL em N vezes. O juro
                 ao cliente (se houver) é configurado na conta Asaas.  */
             if (req.Parcelas is int n && n > 1)

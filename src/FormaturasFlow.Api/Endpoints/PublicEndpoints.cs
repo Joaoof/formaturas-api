@@ -110,6 +110,20 @@ public static class PublicEndpoints
 
     private static string ApenasDigitos(string s) => new(s.Where(char.IsDigit).ToArray());
 
+    /*  IP real do pagador para o anti-fraude do Asaas. Atrás do Caddy, o
+        RemoteIpAddress é o do proxy; o IP do cliente vem no X-Forwarded-For
+        (primeiro da lista).  */
+    private static string? IpDoPagador(HttpContext ctx)
+    {
+        var fwd = ctx.Request.Headers["X-Forwarded-For"].ToString();
+        if (!string.IsNullOrWhiteSpace(fwd))
+        {
+            var primeiro = fwd.Split(',')[0].Trim();
+            if (!string.IsNullOrWhiteSpace(primeiro)) return primeiro;
+        }
+        return ctx.Connection.RemoteIpAddress?.ToString();
+    }
+
     /*  Normaliza o que vem do formulário para os ids que o resto do sistema
         já usa (FORMAS_PAGAMENTO no front e o rótulo do PDF do contrato).
         Qualquer coisa que não seja cartão nem pix cai em boleto: é o padrão
@@ -319,6 +333,7 @@ public static class PublicEndpoints
         "continuar sem pagamento". O dado de cartão não é persistido aqui.  */
     private static async Task<IResult> CobrancaCartaoAsync(
         CobrancaCartaoRequest req,
+        HttpContext ctx,
         IPaymentRouter router,
         ILoggerFactory logs)
     {
@@ -336,7 +351,8 @@ public static class PublicEndpoints
                 ReferenciaExterna: $"cartao:{req.TurmaId}:{ApenasDigitos(req.Documento)}:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
                 Pagador: new PagadorInfo(req.Nome, req.Documento, req.Email, null, req.Cep, req.NumeroEndereco),
                 Cartao: new CartaoCreditoInfo(req.Cartao.Titular, req.Cartao.Numero, req.Cartao.MesValidade, req.Cartao.AnoValidade, req.Cartao.Cvv),
-                Parcelas: req.Parcelas));
+                Parcelas: req.Parcelas,
+                RemoteIp: IpDoPagador(ctx)));
 
             var aprovado = cob.Status is "CONFIRMED" or "RECEIVED" or "RECEIVED_IN_CASH" or "APPROVED";
             return Results.Ok(new CobrancaCartaoResponse(
