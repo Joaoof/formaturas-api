@@ -63,7 +63,10 @@ public static class PublicEndpoints
     public record CobrancaCartaoRequest(
         Guid TurmaId, decimal Valor, int Parcelas,
         string Nome, string Documento, string Email, string Cep, string NumeroEndereco,
-        string Descricao, CartaoInfo Cartao);
+        string Descricao, CartaoInfo Cartao,
+        /*  O Asaas EXIGE o telefone com DDD do titular no cartão — sem ele a
+            cobrança volta "Informe o número de contato com DDD".  */
+        string? Telefone = null);
 
     public record CobrancaCartaoResponse(bool Aprovado, string? ChargeId, string? Status, string Mensagem);
 
@@ -349,7 +352,7 @@ public static class PublicEndpoints
                 Vencimento: DateOnly.FromDateTime(DateTime.UtcNow),
                 Descricao: req.Descricao,
                 ReferenciaExterna: $"cartao:{req.TurmaId}:{ApenasDigitos(req.Documento)}:{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
-                Pagador: new PagadorInfo(req.Nome, req.Documento, req.Email, null, req.Cep, req.NumeroEndereco),
+                Pagador: new PagadorInfo(req.Nome, req.Documento, req.Email, req.Telefone, req.Cep, req.NumeroEndereco),
                 Cartao: new CartaoCreditoInfo(req.Cartao.Titular, req.Cartao.Numero, req.Cartao.MesValidade, req.Cartao.AnoValidade, req.Cartao.Cvv),
                 Parcelas: req.Parcelas,
                 RemoteIp: IpDoPagador(ctx)));
