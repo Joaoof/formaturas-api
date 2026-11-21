@@ -49,9 +49,11 @@ public sealed class AsaasPaymentGateway(
                 ?? throw new DadosPagamentoIncompletosException("pagador.cep",
                     "O Asaas exige CEP do portador para transações com cartão.");
 
-            var numero = req.Pagador.NumeroEndereco
-                ?? throw new DadosPagamentoIncompletosException("pagador.numeroEndereco",
-                    "O Asaas exige o número do endereço do portador para transações com cartão.");
+            /*  Endereço sem número é comum (quadra/lote). O Asaas exige o campo,
+                então mandamos "S/N" quando o pagador não informa.  */
+            var numero = string.IsNullOrWhiteSpace(req.Pagador.NumeroEndereco)
+                ? "S/N"
+                : req.Pagador.NumeroEndereco;
 
             payload["creditCard"] = new
             {
@@ -92,7 +94,11 @@ public sealed class AsaasPaymentGateway(
         if (!resp.IsSuccessStatusCode)
         {
             log.LogError("Asaas cobrança falhou: {Status} {Body}", resp.StatusCode, body);
-            throw new PaymentGatewayException(Provider, $"Falha ao criar cobrança no Asaas: {resp.StatusCode}");
+            /*  Inclui o motivo do Asaas na mensagem (ex.: cartão recusado pelo
+                emissor, conta não habilitada). O handler decide o que mostrar;
+                sem isto a recusa chega como erro genérico e fica impossível
+                saber por que o cartão não passou.  */
+            throw new PaymentGatewayException(Provider, $"Falha ao criar cobrança no Asaas: {resp.StatusCode} — {MotivoAsaas(body)}");
         }
 
         using var doc = JsonDocument.Parse(body);
@@ -201,6 +207,27 @@ public sealed class AsaasPaymentGateway(
     };
 
     private static string Digitos(string valor) => new(valor.Where(char.IsDigit).ToArray());
+
+    /*  Extrai a(s) descrição(ões) de erro do corpo do Asaas
+        (`{"errors":[{"description":"..."}]}`).  Cai pro corpo cru se o
+        formato não bater — melhor um texto feio do que nenhuma pista.  */
+    private static string MotivoAsaas(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("errors", out var errs) && errs.ValueKind == JsonValueKind.Array)
+            {
+                var msgs = errs.EnumerateArray()
+                    .Select(e => Texto(e, "description"))
+                    .Where(d => !string.IsNullOrWhiteSpace(d))
+                    .ToArray();
+                if (msgs.Length > 0) return string.Join("; ", msgs);
+            }
+        }
+        catch { /* corpo não-JSON */ }
+        return body.Length > 300 ? body[..300] : body;
+    }
 
     private static string? Texto(JsonElement elemento, string propriedade) =>
         elemento.TryGetProperty(propriedade, out var v) && v.ValueKind == JsonValueKind.String

@@ -364,8 +364,14 @@ public static class PublicEndpoints
         catch (Exception ex)
         {
             log.LogWarning(ex, "Cartão recusado/erro na adesão");
+            /*  Mostra o motivo do Asaas (ex.: recusado pelo emissor, conta não
+                habilitada para cartão) — sem isso toda recusa vira "tente outro
+                cartão" e fica impossível saber o porquê no teste.  */
+            var detalhe = ex.Message;
+            var corte = detalhe.IndexOf(" — ", StringComparison.Ordinal);
+            var motivo = corte >= 0 ? detalhe[(corte + 3)..] : detalhe;
             return Results.Ok(new CobrancaCartaoResponse(false, null, null,
-                "Não conseguimos aprovar o cartão. Tente outro cartão ou escolha outra forma de pagamento."));
+                $"Cartão não aprovado. Motivo: {motivo}"));
         }
     }
 
